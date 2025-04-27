@@ -43,10 +43,10 @@ This repository contains the work of Team Akasi.ai for the GenAI PHBuilders Hack
 ## 🛠️ Tech Stack
 
 **Front-end:**
-- [Fasthtml](https://fastht.ml/) — For building a fast, responsive landing page and authentication UI.
+- [Fasthtml](https://fastht.ml/) — A minimalist Python web framework that enables building dynamic, component-based web apps with HTMX and ASGI, all in pure Python.
 
 **Back-end:**
-- [Supabase](https://supabase.com/) — For authentication, database, and API management.
+- [Supabase](https://supabase.com/) — An open-source backend-as-a-service offering PostgreSQL, real-time data sync, authentication, storage, and serverless functions—ideal for building scalable applications. 
 
 **AI Inference & LLM Integrations:**
 - [AWS Bedrock](https://aws.amazon.com/bedrock/)
