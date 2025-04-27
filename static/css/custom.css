@@ -1,0 +1,131 @@
+/* static/css/custom.css */
+
+/* Floating Animation */
+@keyframes floatAnimation {
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(-10px); } /* Reduced float height */
+}
+@keyframes floatBubbleAnimation {
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(-6px); } /* Smaller float for bubble */
+}
+
+/* Avatar Circle */
+.avatar-circle {
+    width: 120px;
+    height: 120px;
+    background: linear-gradient(145deg, #8e96f8, #606efa);
+    border-radius: 50%;
+    margin: 2rem auto 0.5rem auto;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: white;
+    font-size: 3rem;
+    font-weight: bold;
+    box-shadow: 0 4px 15px rgba(96, 110, 250, 0.4), 0 0 0 4px rgba(255, 255, 255, 0.1);
+    position: relative;
+    animation: floatAnimation 4s ease-in-out infinite;
+}
+
+/* Chat Bubble */
+.chat-bubble {
+    background-color: #ffffff;
+    padding: 0.8rem 1.2rem;
+    border-radius: 20px;
+    border-top-left-radius: 5px;
+    box-shadow: 0 3px 10px rgba(0, 0, 0, 0.1);
+    max-width: 300px;
+    min-height: 50px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin: 0.5rem auto 2rem auto;
+    position: relative;
+    text-align: center;
+    animation: floatBubbleAnimation 4s ease-in-out infinite;
+    animation-delay: 0.2s;
+}
+
+/* Styling for the text inside the bubble for animation */
+#akasi-message { /* Used on Landing Page */
+    margin: 0;
+    font-size: 1rem;
+    color: #333;
+    transition: opacity 0.4s ease-in-out;
+}
+#akasi-message.fade-out {
+    opacity: 0;
+}
+/* Separate ID for home page message to avoid conflicts */
+#akasi-message-home {
+    margin: 0;
+    font-size: 1rem;
+    color: #333;
+    transition: opacity 0.4s ease-in-out;
+}
+#akasi-message-home.fade-out {
+    opacity: 0;
+}
+
+
+/* Action Card (Only used on Landing Page in this version) */
+.action-card {
+    display: flex !important;
+    align-items: center;
+    background-color: #ffffff;
+    padding: 1.2rem 1.5rem;
+    border-radius: 12px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+    margin-bottom: 1rem;
+    max-width: 450px;
+    width: 100%;
+    text-decoration: none;
+    color: inherit;
+    transition: transform 0.2s ease-out, box-shadow 0.2s ease-out;
+}
+.action-card:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 6px 16px rgba(0, 0, 0, 0.12);
+    color: inherit;
+}
+.action-card-icon {
+    font-size: 1.8rem;
+    margin-right: 1.2rem;
+    color: #606efa;
+    flex-shrink: 0;
+    width: 30px;
+    text-align: center;
+}
+.action-card-text h5 {
+    margin-bottom: 0.2rem;
+    font-size: 1.1rem;
+    font-weight: 600;
+    color: #333;
+}
+.action-card-text p {
+    margin-bottom: 0;
+    font-size: 0.9rem;
+    color: #555;
+}
+
+/* Body centering adjustments */
+body {
+    display: flex;
+    flex-direction: column;
+    min-height: 100vh;
+    background-color: #f8f9fa;
+}
+.landing-container-wrapper {
+    flex-grow: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding-top: 2rem;
+    padding-bottom: 2rem;
+}
+.landing-content, .home-content-wrapper { /* Apply flex centering to home too */
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+}

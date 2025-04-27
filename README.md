@@ -40,6 +40,50 @@ This repository contains the work of Team Akasi.ai for the GenAI PHBuilders Hack
 </div>
 
 
+## 🛠️ Tech Stack
+
+**Front-end:**
+- [Fasthtml](https://fastht.ml/) — For building a fast, responsive landing page and authentication UI.
+
+**Back-end:**
+- [Supabase](https://supabase.com/) — For authentication, database, and API management.
+
+**AI Inference & LLM Integrations:**
+- [AWS Bedrock](https://aws.amazon.com/bedrock/)
+- [Anthropic Claude](https://www.anthropic.com/index/claude)
+- [OpenAI](https://openai.com/)
+- [Together.ai](https://www.together.ai/)
+
+---
+
+## 🔐 Environment Variables
+
+This project uses environment variables to securely manage external service credentials and configurations.
+
+Create a `.env` file at the root of the project with the following keys:
+
+```bash
+# Supabase
+SUPABASE_URL=your-supabase-url
+SUPABASE_ANON_KEY=your-supabase-anon-key
+
+# AWS Bedrock
+AWS_ACCESS_KEY_ID=your-aws-access-key-id
+AWS_SECRET_ACCESS_KEY=your-aws-secret-access-key
+AWS_REGION=your-aws-region
+
+# OpenAI
+OPENAI_API_KEY=your-openai-api-key
+
+# Anthropic Claude
+CLAUDE_API_KEY=your-claude-api-key
+
+# Together AI
+TOGETHER_API_KEY=your-together-api-key
+```
+
+
+
 ## Join Us
 We're looking for partners to help us build akasi.ai:
 - Early testers with chronic health conditions

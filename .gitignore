@@ -1,0 +1,21 @@
+# Virtual Environment
+.venv/
+venv/
+ENV/
+
+# Jupyter Notebook
+.ipynb_checkpoints
+*/.ipynb_checkpoints/*
+*.ipynb_checkpoints*
+
+
+# Python cache files
+__pycache__/
+*.py[cod]
+*$py.class
+
+
+# Local Environment vars and others
+*.env
+.vscode/
+.sesskey
