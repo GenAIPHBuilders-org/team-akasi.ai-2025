@@ -50,9 +50,6 @@ app, rt = fast_app(
         # *** ADD Link to external custom.css ***
         Link(rel='stylesheet', href='/css/custom.css'), # Path relative to static dir
 
-        # *** ADD Links to external JS (using defer) ***
-        Script(src='/js/landing_animation.js', defer=True),
-        Script(src='/js/home_animation.js', defer=True)
     )
 )
 
@@ -61,23 +58,23 @@ app, rt = fast_app(
 # Landing Page
 @rt('/')
 def get():
-    """Landing page - CSS/JS are now external"""
-    avatar_circle = Div('A', cls="avatar-circle")
-    # Chat bubble only needs the ID now
-    chat_bubble = Div(P(id="akasi-message"), cls="chat-bubble")
-    signup_card = A(I(cls="bi bi-person-plus-fill action-card-icon"), Div(H5("Create Account"), P("Join Akasi to start tracking your wellness journey."), cls="action-card-text"), href="/signup", cls="action-card")
-    login_card = A(I(cls="bi bi-box-arrow-in-right action-card-icon"), Div(H5("Login"), P("Access your personalized health dashboard."), cls="action-card-text"), href="/login", cls="action-card")
 
-    # *** REMOVED inline text_animation_script ***
-    landing_content = Div(
-        avatar_circle, chat_bubble, signup_card, login_card,
-        cls="landing-content"
-    )
+
+    landing_script = Script(src='/js/landing_animation.js', defer=True)
+
+    avatar_circle = Div('A', cls="avatar-circle")
+    chat_bubble = Div(P(id="akasi-message"), cls="chat-bubble") # Target element for landing animation
+    signup_card = A(I(cls="bi bi-person-plus-fill action-card-icon"), Div(H5("Create Account"), P("Join Akasi."), cls="action-card-text"), href="/signup", cls="action-card")
+    login_card = A(I(cls="bi bi-box-arrow-in-right action-card-icon"), Div(H5("Login"), P("Access dashboard."), cls="action-card-text"), href="/login", cls="action-card")
+
+    landing_content = Div(avatar_circle, chat_bubble, signup_card, login_card, landing_script, cls="landing-content")
     page_wrapper = Div(landing_content, cls="landing-container-wrapper container")
+
+
+
     return Titled("Welcome to Akasi.ai", page_wrapper)
 
 
-# Signup Page (Unchanged)
 @rt('/signup')
 def get():
     email_input = Div(Label("Email address", cls="form-label", **{'for': "emailInput"}), Input(type="email", name="email", required=True, cls="form-control", id="emailInput"), cls="mb-3")
@@ -115,7 +112,6 @@ async def post(req, sess):
         page_wrapper = Div(Div(content, cls="row justify-content-center"), cls="container mt-5")
         return Titled("Signup Error", page_wrapper)
 
-# Login Page (Unchanged)
 @rt('/login')
 def get():
     email_input = Div(Label("Email address", cls="form-label", **{'for': "emailInputLogin"}), Input(type="email", name="email", required=True, cls="form-control", id="emailInputLogin"), cls="mb-3")
@@ -129,16 +125,23 @@ def get():
     page_wrapper = Div(Div(content, cls="row justify-content-center"), cls="container mt-5")
     return Titled("Login", page_wrapper)
 
-@rt('/login')
+
+@rt('/login') 
 async def post(req, sess):
     form = await parse_form(req); email = form.get('email'); password = form.get('password')
     try:
         res = supabase.auth.sign_in_with_password({"email": email, "password": password})
         user = res.user
+        print(user)
+
+        # TODO: Creat a function to handle onboarding step so that they can be redirected to the right routes and how
+        # and how do you maintain that all through out ... like maybe upon account creation lang ma tawag to na function noh ?
+
+    
         sess['user'] = {'id': user.id, 'email': user.email}
         return RedirectResponse('/home', status_code=303)
     except Exception as e:
-        error_alert = Div(Strong("Login Error!"), f" {str(e)}", A(" Try Again", href="/login", cls="alert-link"), cls="alert alert-danger mt-4", role="alert")
+        error_alert = Div(Strong("Login Error!"), f" {str(e)} ", A("Please Try Again", href="/login", cls="alert-link"), cls="alert alert-danger mt-4", role="alert")
         email_input = Div(Label("Email address", cls="form-label", **{'for': "emailInputLogin"}), Input(type="email", name="email", required=True, cls="form-control", id="emailInputLogin", value=email or ''), cls="mb-3")
         password_input = Div(Label("Password", cls="form-label", **{'for': "passwordInputLogin"}), Input(type="password", name="password", required=True, cls="form-control", id="passwordInputLogin"), cls="mb-3")
         submit_button = Button("Login", type="submit", cls="btn btn-primary w-100")
@@ -153,9 +156,9 @@ async def post(req, sess):
 # Home Page
 @rt('/home')
 def get(auth):
-    """Home page - CSS/JS are now external, defines messages inline"""
     if auth is None: return RedirectResponse('/login', status_code=303)
 
+    home_animation_script = Script(src='/js/home_animation.js', defer=True)
     user_email = auth.get('email', 'A'); user_initial = user_email[0].upper() if user_email else 'A'
     avatar_circle = Div(user_initial, cls="avatar-circle")
     # Chat bubble only needs the ID now
@@ -171,9 +174,7 @@ def get(auth):
         "Remember to stay hydrated!",
         "Anything specific you'd like to track?"
     ]
-    # Safely embed the list as a JSON string for JavaScript
     home_messages_json = json.dumps(home_messages_list)
-    # Define the global JS variable
     home_messages_script = Script(f"window.homeMessages = {home_messages_json};")
 
     # *** REMOVED inline home_text_animation_script ***
@@ -181,8 +182,8 @@ def get(auth):
         avatar_circle,
         chat_bubble,
         Div(logout_form, cls="text-center"),
-        # *** ADD INLINE SCRIPT TO DEFINE MESSAGES ***
-        home_messages_script, # External JS will pick this up
+        home_messages_script, 
+        home_animation_script,
         cls="home-content-wrapper"
     )
     page_wrapper = Div(home_content, cls="container d-flex flex-column justify-content-center align-items-center", style="flex-grow: 1;")
