@@ -40,13 +40,9 @@ app, rt = fast_app(
     # *** ADD static_path ***
     static_path='static', # Tell FastHTML where static files are
     hdrs=(
-        # Bootstrap Links remain
         Link(rel='stylesheet', href=bootstrap_css_cdn, integrity="sha384-QWTKZyjpPEjISv5WaRU9OFeRpok6YctnYmDr5pNlyT2bRjXh0JMhjY6hW+ALEwIH", crossorigin="anonymous"),
         Link(rel='stylesheet', href=bootstrap_icons_cdn),
         Script(src=bootstrap_js_cdn, integrity="sha384-YvpcrYf0tY3lHB60NNkmXc5s9fDVZLESaAA55NDzOxhy9GkcIdslK1eN7N6jIeHz", crossorigin="anonymous"),
-
-        # *** REMOVED Style(custom_styles) ***
-
         # *** ADD Link to external custom.css ***
         Link(rel='stylesheet', href='/css/custom.css'), # Path relative to static dir
 
@@ -197,6 +193,5 @@ def post(sess):
     if 'user' in sess: del sess['user']
     return RedirectResponse('/', status_code=303)
 
-# --- Serve ---
-if __name__ == "__main__":
-    serve()
+
+serve()
