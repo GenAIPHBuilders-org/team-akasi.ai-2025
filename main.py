@@ -1,11 +1,13 @@
 from fasthtml.common import *
-# Import SVG for potential icon use later if needed, though we'll use Bootstrap Icons first
 from fasthtml.svg import Svg, Path
 from supabase import create_client, Client
 from dotenv import load_dotenv
 import os
 from pathlib import Path
-import json # Import json for safely embedding the messages list
+import json
+from services.sb_user_services import fetch_user_profile
+
+
 
 # --- Configuration ---
 BASE_DIR = Path(__file__).resolve().parent
@@ -59,27 +61,37 @@ def get():
     landing_script = Script(src='/js/landing_animation.js', defer=True)
 
     avatar_circle = Div('A', cls="avatar-circle")
-    chat_bubble = Div(P(id="akasi-message"), cls="chat-bubble") # Target element for landing animation
+    chat_bubble = Div(P(id="akasi-message"), cls="chat-bubble") # Target element for landing animation (not bottom up kay tungod sa Js)
     signup_card = A(I(cls="bi bi-person-plus-fill action-card-icon"), Div(H5("Create Account"), P("Join Akasi."), cls="action-card-text"), href="/signup", cls="action-card")
     login_card = A(I(cls="bi bi-box-arrow-in-right action-card-icon"), Div(H5("Login"), P("Access dashboard."), cls="action-card-text"), href="/login", cls="action-card")
 
     landing_content = Div(avatar_circle, chat_bubble, signup_card, login_card, landing_script, cls="landing-content")
-    page_wrapper = Div(landing_content, cls="landing-container-wrapper container")
 
 
 
-    return Titled("Welcome to Akasi.ai", page_wrapper)
+
+    return Titled("Welcome to Akasi.ai", landing_content)
 
 
 @rt('/signup')
 def get():
+    # Mura lage og pa reverse ang style if ingon ani like mag start sa pinaka ubos then e wrap wrap dayun pa ubos
+    # Ma bottom up approach siya if ang element naay mga children or pwede nimo sa jaavascript nalang e butang para sa chat bubble
+    # Pwede pani siya ma arrange jud og maayo nga consistent among bottom ups
+
+    page_title = H1("Create an Account", cls="text-center mb-4")
+
     email_input = Div(Label("Email address", cls="form-label", **{'for': "emailInput"}), Input(type="email", name="email", required=True, cls="form-control", id="emailInput"), cls="mb-3")
     password_input = Div(Label("Password", cls="form-label", **{'for': "passwordInput"}), Input(type="password", name="password", required=True, cls="form-control", id="passwordInput"), cls="mb-3")
     submit_button = Button("Sign Up", type="submit", cls="btn btn-primary w-100")
-    signup_form = Form(email_input, password_input, submit_button, method="post", action="/signup", cls="mt-4")
+    signup_form = Form(email_input, password_input, submit_button, method="post", action="/signup", cls="mt-4") # This triggers the post method below
+    
     login_link_section = Div(P("Already have an account? ", A("Login", href="/login")), cls="mt-3 text-center")
-    page_title = H1("Create an Account", cls="text-center mb-4")
+
+    
     content = Div(Div(Div(page_title, signup_form, login_link_section, cls="card-body p-4"), cls="card shadow-sm"), cls="col-md-6 col-lg-5 mx-auto")
+    
+    # Final allignments
     page_wrapper = Div(Div(content, cls="row justify-content-center"), cls="container mt-5")
     return Titled("Sign Up", page_wrapper)
 
@@ -128,7 +140,7 @@ async def post(req, sess):
     try:
         res = supabase.auth.sign_in_with_password({"email": email, "password": password})
         user = res.user
-        print(user)
+        # print(user)
 
         # TODO: Creat a function to handle onboarding step so that they can be redirected to the right routes and how
         # and how do you maintain that all through out ... like maybe upon account creation lang ma tawag to na function noh ?
@@ -149,16 +161,45 @@ async def post(req, sess):
         page_wrapper = Div(Div(content, cls="row justify-content-center"), cls="container mt-5")
         return Titled("Login Error", page_wrapper)
 
-# Home Page
+# Home Page - Pinaka best example of bottom up approach
 @rt('/home')
 def get(auth):
     if auth is None: return RedirectResponse('/login', status_code=303)
+
+    
+    user_id = auth.get('id')
+    user_profile = fetch_user_profile(supabase, user_id)
+    current_onboarding_step = user_profile.get('onboarding_step')
+
+    print(current_onboarding_step)
 
     home_animation_script = Script(src='/js/home_animation.js', defer=True)
     user_email = auth.get('email', 'A'); user_initial = user_email[0].upper() if user_email else 'A'
     avatar_circle = Div(user_initial, cls="avatar-circle")
     # Chat bubble only needs the ID now
     chat_bubble = Div(P(id="akasi-message-home"), cls="chat-bubble")
+    
+    # Add static text and update button
+    status_text = P(
+        "Update Database Value: Getting Personal Info Step", 
+        id="status-text",
+        cls="mt-4 mb-3 text-center"
+    )
+    
+    update_button = Button(
+        "Update", 
+        type="button", 
+        id="update-button", 
+        cls="btn btn-primary mb-4"
+    )
+    
+    update_section = Div(
+        status_text,
+        update_button,
+        cls="update-section w-100 text-center"
+    )
+
+
     logout_button = Button("Logout", type="submit", cls="btn btn-danger mt-4")
     logout_form = Form(logout_button, method="post", action="/logout")
 
@@ -173,10 +214,10 @@ def get(auth):
     home_messages_json = json.dumps(home_messages_list)
     home_messages_script = Script(f"window.homeMessages = {home_messages_json};")
 
-    # *** REMOVED inline home_text_animation_script ***
     home_content = Div(
         avatar_circle,
         chat_bubble,
+        update_section,
         Div(logout_form, cls="text-center"),
         home_messages_script, 
         home_animation_script,

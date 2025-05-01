@@ -1,0 +1,2 @@
+# ui_updates/__init__.py
+from dynamic_ui_functions.onboarding import register_routes as register_onboarding_routes
