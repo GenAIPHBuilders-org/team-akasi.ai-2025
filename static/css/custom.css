@@ -10,7 +10,7 @@
     50% { transform: translateY(-6px); } /* Smaller float for bubble */
 }
 
-/* Avatar Circle */
+/* Avatar Circle - Enhanced styling */
 .avatar-circle {
     width: 120px;
     height: 120px;
@@ -28,14 +28,14 @@
     animation: floatAnimation 4s ease-in-out infinite;
 }
 
-/* Chat Bubble */
+/* Chat Bubble - Enhanced styling */
 .chat-bubble {
     background-color: #ffffff;
     padding: 0.8rem 1.2rem;
     border-radius: 20px;
     border-top-left-radius: 5px;
     box-shadow: 0 3px 10px rgba(0, 0, 0, 0.1);
-    max-width: 300px;
+    max-width: 600px;
     min-height: 50px;
     display: flex;
     align-items: center;
@@ -45,6 +45,9 @@
     text-align: center;
     animation: floatBubbleAnimation 4s ease-in-out infinite;
     animation-delay: 0.2s;
+    border: 1px solid #e9ecef;
+    line-height: 1.6;
+    color: #495057;
 }
 
 /* Styling for the text inside the bubble for animation */
@@ -68,8 +71,7 @@
     opacity: 0;
 }
 
-
-/* Action Card (Only used on Landing Page in this version) */
+/* Action Card - Enhanced styling */
 .action-card {
     display: flex !important;
     align-items: center;
@@ -115,6 +117,7 @@ body {
     flex-direction: column;
     min-height: 100vh;
     background-color: #f8f9fa;
+    overflow-x: hidden;
 }
 .landing-container-wrapper {
     flex-grow: 1;
@@ -124,8 +127,229 @@ body {
     padding-top: 2rem;
     padding-bottom: 2rem;
 }
-.landing-content, .home-content-wrapper { /* Apply flex centering to home too */
+.landing-content, .home-content-wrapper {
     display: flex;
     flex-direction: column;
     align-items: center;
+}
+
+/* Onboarding Route Styles */
+.personal-info-content-wrapper {
+    padding: 3rem 1rem;
+    text-align: center;
+}
+
+.wellness-journal-content-wrapper {
+    padding: 3rem 1rem;
+    text-align: center;
+}
+
+.description-section {
+    max-width: 800px;
+    margin: 0 auto;
+}
+
+/* Form styling - Enhanced */
+#personal-info-form {
+    width: 100%;
+    max-width: 700px;
+    margin: 0 auto;
+    display: none;
+    opacity: 0;
+    transition: all 0.5s ease-in-out;
+    transform: translateY(20px);
+    background: white;
+    border-radius: 15px;
+}
+
+#personal-info-form.show {
+    display: block !important;
+    opacity: 1 !important;
+    transform: translateY(0);
+}
+
+#show-form-button {
+    display: inline-block;
+    transition: all 0.3s ease-in-out;
+    box-shadow: 0 4px 15px rgba(0, 123, 255, 0.2);
+}
+
+#show-form-button:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 20px rgba(0, 123, 255, 0.3);
+}
+
+#show-form-button.hidden {
+    opacity: 0;
+    transform: scale(0.9);
+    pointer-events: none;
+    display: none;
+}
+
+/* Form controls - Enhanced */
+.form-control-lg, .form-select-lg {
+    border-radius: 8px;
+    padding: 12px 16px;
+    border: 2px solid #e9ecef;
+}
+
+.form-control-lg:focus, .form-select-lg:focus {
+    border-color: #007bff;
+    box-shadow: 0 0 0 0.25rem rgba(0, 123, 255, 0.25);
+}
+
+/* Form validation feedback - Enhanced */
+.is-invalid {
+    border-color: #dc3545;
+}
+
+.is-invalid:focus {
+    border-color: #dc3545;
+    box-shadow: 0 0 0 0.25rem rgba(220, 53, 69, 0.25);
+}
+
+/* Buttons - Enhanced */
+.btn-primary {
+    background: linear-gradient(135deg, #007bff, #0056b3);
+    border: none;
+    border-radius: 50px;
+    transition: all 0.3s ease;
+}
+
+.btn-primary:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 15px rgba(0, 123, 255, 0.3);
+}
+
+/* Card styling */
+.card {
+    border-radius: 15px;
+    transition: all 0.3s ease;
+    border: none;
+}
+
+.card.shadow-lg {
+    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.1) !important;
+}
+
+/* Enhanced Typography */
+.text-primary {
+    color: #007bff !important;
+}
+
+.fw-semibold {
+    font-weight: 600;
+}
+
+.display-5 {
+    font-size: calc(1.425rem + 2.1vw);
+}
+
+.lead {
+    font-size: 1.25rem;
+    font-weight: 300;
+}
+
+/* Enhanced Layout Utilities */
+.min-vh-100 {
+    min-height: 100vh;
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+    .personal-info-content-wrapper,
+    .wellness-journal-content-wrapper {
+        padding: 2rem 1rem;
+    }
+    
+    .chat-bubble {
+        padding: 0.8rem 1.2rem;
+        max-width: 90%;
+    }
+    
+    .description-section {
+        max-width: 100%;
+    }
+    
+    .avatar-circle {
+        width: 100px;
+        height: 100px;
+        font-size: 2.5rem;
+    }
+    
+    .card-body.p-4.p-md-5 {
+        padding: 1.5rem !important;
+    }
+}
+
+/* Smooth transitions and animations */
+html {
+    scroll-behavior: smooth;
+}
+
+/* Utility classes for enhanced spacing */
+.spacer-md {
+    height: 2rem;
+}
+
+.spacer-lg {
+    height: 3rem;
+}
+
+/* Enhanced form layouts */
+.form-row {
+    display: flex;
+    gap: 1rem;
+}
+
+.form-group {
+    margin-bottom: 1.5rem;
+}
+
+/* Animation for form appearance */
+@keyframes slideUp {
+    from {
+        opacity: 0;
+        transform: translateY(20px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.animate-slide-up {
+    animation: slideUp 0.5s ease-out;
+}
+
+/* Gradient buttons */
+.gradient-primary {
+    background: linear-gradient(45deg, #4287f5, #2961cc);
+    border: none;
+    color: white !important;
+    transition: transform 0.2s, box-shadow 0.2s;
+}
+
+.gradient-primary:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(66, 135, 245, 0.4);
+}
+
+.gradient-secondary {
+    background: linear-gradient(45deg, #676767, #404040);
+    border: none;
+    color: white !important;
+    transition: transform 0.2s, box-shadow 0.2s;
+}
+
+.gradient-secondary:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(64, 64, 64, 0.4);
+}
+
+/* Override PicoCSS button focus outline for gradient buttons */
+[role="button"].gradient-primary:focus,
+[role="button"].gradient-secondary:focus {
+    outline: 2px solid var(--primary-focus);
+    outline-offset: 2px;
 }
