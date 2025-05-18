@@ -1,5 +1,4 @@
 // static/js/landing_animation.js
-
 document.addEventListener('DOMContentLoaded', (event) => {
     // Script for Landing Page Bubble
     const messages = [
@@ -7,10 +6,11 @@ document.addEventListener('DOMContentLoaded', (event) => {
         "Your AI health guardian.",
         "Ready to get started?",
         "Let's track your wellness together!",
-        "Sign up or log in below!"
+        "Sign up or log in to continue!" // Changed last message slightly
     ];
     let messageIndex = 0;
-    const messageElement = document.getElementById('akasi-message'); // Target landing page ID
+    // Changed ID to match the one in the hero card
+    const messageElement = document.getElementById('akasi-hero-message');
     const changeInterval = 3500; // Time in milliseconds (3.5 seconds)
     const fadeDuration = 400; // Must match CSS transition duration
 
@@ -30,10 +30,10 @@ document.addEventListener('DOMContentLoaded', (event) => {
 
     // Initial message set
     if (messageElement) {
-        messageElement.textContent = messages[0];
+        messageElement.textContent = messages[0]; // Set initial message
         // Start the interval
-         setInterval(changeMessage, changeInterval);
+        setInterval(changeMessage, changeInterval);
     } else {
-        console.error("Akasi message element not found on landing page");
+        console.error("Akasi hero message element not found on landing page");
     }
 });

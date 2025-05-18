@@ -1,0 +1,30 @@
+/* Custom styles can be added here if needed */
+body {
+    font-family: 'Inter', sans-serif; /* A common, clean font choice */
+}
+
+/* CSS for the text fade animation */
+.fade-out {
+    opacity: 0;
+    transition: opacity 0.4s ease-out; /* Must match JS fadeDuration */
+}
+
+.chat-bubble { /* Ensure bubble transitions opacity smoothly if text changes */
+    opacity: 1;
+    /* transition: opacity 0.4s ease-in; */ /* Commenting out to prioritize float transition */
+}
+
+/* Keyframes for continuous floating animation */
+@keyframes floatAnimation {
+    0%, 100% {
+        transform: translateY(0);
+    }
+    50% {
+        transform: translateY(-8px); /* Adjust this value for more/less float height */
+    }
+}
+
+/* Class to apply the floating animation */
+.animate-float {
+    animation: floatAnimation 3s ease-in-out infinite;
+}
