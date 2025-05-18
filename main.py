@@ -1,5 +1,6 @@
 import datetime
 from datetime import datetime 
+from fasthtml.svg import *
 from fasthtml.common import *
 # Ensure all necessary SVG elements are imported
 from supabase import create_client, Client
@@ -59,162 +60,491 @@ app, rt = fast_app(
 )
 
 
-# --- UI Component Functions with DaisyUI ---
-
-
-def ChatboxUIComponent():
-
-
-    attach_button = Button(
-        "+", 
-        cls="btn btn-ghost btn-md join-item", # Added join-item, btn-md for consistent height
-        title="Attach files"
-    )
-
-    # Textarea for message input
-    message_input_area = Textarea(
-        placeholder="Type your message...", 
-        cls="textarea textarea-accent"
-    )
-
-    # Send button
-    send_button = Button(
-        "Send", 
-        cls="btn btn-primary",
-        title="Send message"
-    )
-
-    return Div(
-        H2("Chatbox Area", cls="text-lg font-semibold p-3 text-center bg-base-300 rounded-t-lg"),
-        Div(
-            P("Chat messages will appear here.", cls="p-4 text-sm text-base-content opacity-70"),
-            cls="flex-grow overflow-y-auto p-2", style="min-height: 200px;" 
-        ),
-
-        Div(
-            Div(
-                attach_button,
-                message_input_area,
-                send_button,
-            )
-        ),
-        cls="card bordered border-black bg-base-100 shadow-md flex flex-col", 
-        style="height: 100%;", 
-        data_theme="light" 
-    )
-
-
-def BodyScannerAndJournalUIComponent():
-    """
-    Simplified Body Scanner and Journal UI Component.
-    A simple container with a black outline and placeholder text, internally split, explicitly set to light theme.
-    No SVG icons.
-    """
-    return Div(
-        # Left Panel: Body Scanner Placeholder
-        Div(
-            H2("Body Scanner Area", cls="text-lg font-semibold p-2 text-center bg-base-300 rounded-t-lg"),
-            Div(
-                P("Body scanner visualization and controls will be here.", cls="p-4 text-sm text-base-content opacity-70"),
-                cls="flex-grow flex items-center justify-center", style="min-height: 150px;"
-            ),
-            cls="card bordered border-black bg-base-100 shadow-md flex flex-col flex-grow p-2", # DaisyUI card for scanner part
-            style="min-height: 300px;" # Ensure visible height
-        ),
-        # Right Panel: Wellness Journal Placeholder
-        Div(
-            H2("Wellness Journal Area", cls="text-lg font-semibold p-2 text-center bg-base-300 rounded-t-lg"),
-            Div(
-                P("Journal entries and manual add form will be here.", cls="p-4 text-sm text-base-content opacity-70"),
-                cls="flex-grow overflow-y-auto p-2", style="min-height: 150px;"
-            ),
-            cls="card bordered border-black bg-base-100 shadow-md flex flex-col flex-grow p-2", # DaisyUI card for journal part
-            style="min-height: 300px;" # Ensure visible height
-        ),
-        cls="flex flex-col md:flex-row gap-4 h-full", # This component itself is a flex container for its two parts
-        data_theme="light" # Explicitly set DaisyUI light theme for this component
-    )
-
-
 
 
 # --- Routes ---
 
-wellness_journal_styles_content = """ INSERT THE CSS HERE """
 
-wellness_journal_script_content = """ INSERT THE JS HERE"""
+# This link will be used in the route
+wellness_journal_css_link = Link(rel='stylesheet', href='/css/wellness_journal.css')
+google_material_icons_link = Link(href="https://fonts.googleapis.com/icon?family=Material+Icons", rel="stylesheet")
+
 
 @rt('/onboarding/wellness-journal')
 def get(auth):
-    if auth is None: return RedirectResponse('/login', status_code=303)
+    if auth is None: 
+        return RedirectResponse('/login', status_code=303)
     
-    user_email = auth.get('email', 'A')
-    user_initial = user_email[0].upper() if user_email else 'A'
-    
-    # Header with title
-    header = H1("Akasi.ai | Wellness Journal", style="color: black; text-align: center; margin-bottom: 2rem;")
-    
-    # Avatar with user initial - matching style from personal-info
-    avatar_circle = Div(
-        user_initial, 
-        cls="avatar-circle", 
-        style="margin: 0 auto 1rem; width: 80px; height: 80px; border-radius: 50%; background: #4287f5; color: white; display: flex; align-items: center; justify-content: center; font-size: 2rem;"
-    )
-    
-    # Light-themed container with content
-    journal_content = Article(
-        H3("Let's build your wellness journal", style="text-align: center; margin-bottom: 1rem;"),
-        
+    # --- Chatbox Header ---
+    chatbox_header = Header(
+        H1("Akasi.ai Chat", cls="text-lg sm:text-xl font-semibold text-center"),
         Div(
-            P("I'm Akasi.ai, your AI guardian of health and wellness.", style="margin-bottom: 0.75rem;"),
-            P("This wellness journal will be your space to share any health concerns, symptoms, or wellness goals you might have. Everything you share here is private and secure.", style="margin-bottom: 0.75rem;"),
-            P("I'll help you track your health journey and provide personalized insights based on the information you choose to share.", style="margin-bottom: 1.5rem;"),
-            style="text-align: center;"
+            Button(
+                Span("refresh", cls="material-icons emoji-icon mr-1"), " Clear Chat", # Changed
+                id="clearChatButton",
+                cls="btn btn-xs bg-white/20 hover:bg-white/30 border-none flex items-center gap-1",
+                title="Clear chat history"
+            ),
+            Button(
+                "Add AI Bubble",
+                id="addAIBubbleButton",
+                cls="btn btn-xs bg-white/20 hover:bg-white/30 border-none",
+                title="Add sample AI chat bubble"
+            ),
+            Button(
+                "Add User Bubble",
+                id="addUserBubbleButton",
+                cls="btn btn-xs bg-white/20 hover:bg-white/30 border-none",
+                title="Add sample User chat bubble"
+            ),
+            cls="flex space-x-2 mt-1.5"
         ),
-        
-        A(
-            "Start Your Wellness Journey",
-            href="/home",
-            role="button",
-            id="confirm-wellness-journal",
-            style="display: block; width: 100%; text-align: center; background: linear-gradient(45deg, #4287f5, #2961cc); border: none; color: white; padding: 0.75rem 1.5rem;"
-        ),
-        
-        style="padding: 2rem;",
-        data_theme="light"  # Set light theme explicitly
-    )
-    
-    # Add the wellness messages for the animation
-    wellness_messages = [
-        "Welcome to your wellness journey!",
-        "I'm Akasi, your AI health companion.",
-        "Together, we'll build something special - your personal wellness journal.",
-        "Your health and privacy are my top priority."
-    ]
-    wellness_messages_json = json.dumps(wellness_messages)
-    wellness_messages_script = Script(f"window.wellnessMessages = {wellness_messages_json};")
-    
-    # Wrapper containing all components
-    content = Div(
-        header,
-        avatar_circle,
-        journal_content,
-        wellness_messages_script,
-        style="max-width: 800px; width: 100%; margin: 0 auto;"
-    )
-    
-    # Main wrapper that centers vertically - matching style from other routes
-    main_wrapper = Main(
-        content,
-        cls="container",
-        style="min-height: 100vh; display: flex; align-items: center; justify-content: center; transform: translateY(-10%);"  # Match the upward positioning
-    )
-    
-    return (
-        Title("Wellness Journal"),
-        main_wrapper
+        id="chatboxHeader",
+        cls="p-3.5 sm:p-4 shadow-md primary-green-gradient flex flex-col items-center"
     )
 
+    # --- Chatbox Messages Area (with example messages) ---
+    messages_area = Div(
+        Div(
+            Div(
+                Div( 
+                    Div(
+                        Span("smart_toy", cls="material-icons emoji-icon"), # Changed
+                        cls="bg-transparent text-neutral-content rounded-full w-8 h-8 text-sm flex items-center justify-center"
+                    ),
+                    cls="avatar placeholder p-0 w-8 h-8 rounded-full mr-2 bg-base-300"
+                ),
+                Div( 
+                    P("This is the first AI response.", cls="text-sm leading-relaxed chat-message-text"),
+                    cls="chat-bubble chat-bubble-neutral bg-base-300 text-base-content rounded-bl-none shadow-md"
+                ),
+                cls="flex items-end max-w-xs sm:max-w-md md:max-w-lg"
+            ),
+            cls="flex justify-start"
+        ),
+        Div(
+            Div(
+                Div( 
+                    Div(
+                        Span("person", cls="material-icons emoji-icon"), # Changed
+                        cls="bg-transparent text-neutral-content rounded-full w-8 h-8 text-sm flex items-center justify-center"
+                    ),
+                    cls="avatar placeholder p-0 w-8 h-8 rounded-full ml-2 user-message-gradient"
+                ),
+                Div( 
+                    P("Hello Akasi!", cls="text-sm leading-relaxed chat-message-text"),
+                    cls="chat-bubble chat-bubble-primary user-message-gradient rounded-br-none shadow-md"
+                ),
+                cls="flex items-end max-w-xs sm:max-w-md md:max-w-lg flex-row-reverse"
+            ),
+            cls="flex justify-end"
+        ),
+        Div(
+            Div(
+                Div( 
+                    Div(
+                        Span("smart_toy", cls="material-icons emoji-icon"), # Changed
+                        cls="bg-transparent text-neutral-content rounded-full w-8 h-8 text-sm flex items-center justify-center"
+                    ),
+                    cls="avatar placeholder p-0 w-8 h-8 rounded-full mr-2 bg-base-300"
+                ),
+                Div( 
+                    P("Here's a response to your query about images.", cls="text-sm leading-relaxed chat-message-text"),
+                    cls="chat-bubble chat-bubble-neutral bg-base-300 text-base-content rounded-bl-none shadow-md"
+                ),
+                cls="flex items-end max-w-xs sm:max-w-md md:max-w-lg"
+            ),
+            cls="flex justify-start"
+        ),
+        Div(
+            Div(
+                Div( 
+                    Div(
+                        Span("person", cls="material-icons emoji-icon"), # Changed
+                        cls="bg-transparent text-neutral-content rounded-full w-8 h-8 text-sm flex items-center justify-center"
+                    ),
+                    cls="avatar placeholder p-0 w-8 h-8 rounded-full ml-2 user-message-gradient"
+                ),
+                Div( 
+                    P("Okay, check out these images.", cls="text-sm leading-relaxed chat-message-text"),
+                    Div( 
+                        Div(
+                            Div(
+                                Img(src="https://placehold.co/100x75/A7F3D0/10B981?text=Img1", alt="Attached image 1", cls="rounded max-w-full h-auto max-h-32 object-contain", onerror="this.onerror=null; this.src='https://placehold.co/100x75/FEE2E2/DC2626?text=Error';"),
+                                P("image_sample_1.jpg (78 KB)", cls="text-xs text-base-content/70 mt-1 truncate")
+                            ),
+                            cls="p-1.5 rounded-md bg-base-100/50 border border-base-300/50"
+                        ),
+                        Div(
+                            Div(
+                                Img(src="https://placehold.co/100x75/A7F3D0/10B981?text=Img2", alt="Attached image 2", cls="rounded max-w-full h-auto max-h-32 object-contain", onerror="this.onerror=null; this.src='https://placehold.co/100x75/FEE2E2/DC2626?text=Error';"),
+                                P("photo_of_rash.png (120 KB)", cls="text-xs text-base-content/70 mt-1 truncate")
+                            ),
+                            cls="p-1.5 rounded-md bg-base-100/50 border border-base-300/50"
+                        ),
+                        Div(
+                            Div(
+                                Img(src="https://placehold.co/100x75/A7F3D0/10B981?text=Img3", alt="Attached image 3", cls="rounded max-w-full h-auto max-h-32 object-contain", onerror="this.onerror=null; this.src='https://placehold.co/100x75/FEE2E2/DC2626?text=Error';"),
+                                P("scan_result_view.jpeg (95 KB)", cls="text-xs text-base-content/70 mt-1 truncate")
+                            ),
+                            cls="p-1.5 rounded-md bg-base-100/50 border border-base-300/50"
+                        ),
+                        cls="mt-2 pt-2 space-y-2 border-t border-green-400/50"
+                    ),
+                    cls="chat-bubble chat-bubble-primary user-message-gradient rounded-b-xl shadow-md"
+                ),
+                cls="flex items-end max-w-xs sm:max-w-md md:max-w-lg flex-row-reverse"
+            ),
+            cls="flex justify-end"
+        ),
+        Div(
+            Div(
+                Div( 
+                    Div(
+                        Span("smart_toy", cls="material-icons emoji-icon"), # Changed
+                        cls="bg-transparent text-neutral-content rounded-full w-8 h-8 text-sm flex items-center justify-center"
+                    ),
+                    cls="avatar placeholder p-0 w-8 h-8 rounded-full mr-2 bg-base-300"
+                ),
+                Div( 
+                    P("Understood. And for the documents?", cls="text-sm leading-relaxed chat-message-text"),
+                    cls="chat-bubble chat-bubble-neutral bg-base-300 text-base-content rounded-bl-none shadow-md"
+                ),
+                cls="flex items-end max-w-xs sm:max-w-md md:max-w-lg"
+            ),
+            cls="flex justify-start"
+        ),
+        Div(
+            Div(
+                Div( 
+                    Div(
+                        Span("person", cls="material-icons emoji-icon"), # Changed
+                        cls="bg-transparent text-neutral-content rounded-full w-8 h-8 text-sm flex items-center justify-center"
+                    ),
+                    cls="avatar placeholder p-0 w-8 h-8 rounded-full ml-2 user-message-gradient"
+                ),
+                Div( 
+                    P("And here are some PDF documents.", cls="text-sm leading-relaxed chat-message-text"),
+                    Div( 
+                        Div(
+                            Div(
+                                Span("attachment", cls="material-icons emoji-icon text-xl text-primary flex-shrink-0"), # Changed
+                                Div(
+                                    P("lab_results_q1.pdf", cls="text-xs font-medium text-base-content/90 truncate"),
+                                    P("256 KB", cls="text-xs text-base-content/70"),
+                                    cls="flex-grow overflow-hidden"
+                                ),
+                                cls="flex items-center gap-2"
+                            ),
+                            cls="p-1.5 rounded-md bg-base-100/50 border border-base-300/50"
+                        ),
+                        Div(
+                            Div(
+                                Span("attachment", cls="material-icons emoji-icon text-xl text-primary flex-shrink-0"), # Changed
+                                Div(
+                                    P("medical_history_summary.pdf", cls="text-xs font-medium text-base-content/90 truncate"),
+                                    P("512 KB", cls="text-xs text-base-content/70"),
+                                    cls="flex-grow overflow-hidden"
+                                ),
+                                cls="flex items-center gap-2"
+                            ),
+                            cls="p-1.5 rounded-md bg-base-100/50 border border-base-300/50"
+                        ),
+                        Div(
+                            Div(
+                                Span("attachment", cls="material-icons emoji-icon text-xl text-primary flex-shrink-0"), # Changed
+                                Div(
+                                    P("prescription_details.pdf", cls="text-xs font-medium text-base-content/90 truncate"),
+                                    P("128 KB", cls="text-xs text-base-content/70"),
+                                    cls="flex-grow overflow-hidden"
+                                ),
+                                cls="flex items-center gap-2"
+                            ),
+                            cls="p-1.5 rounded-md bg-base-100/50 border border-base-300/50"
+                        ),
+                        cls="mt-2 pt-2 space-y-2 border-t border-green-400/50"
+                    ),
+                    cls="chat-bubble chat-bubble-primary user-message-gradient rounded-b-xl shadow-md"
+                ),
+                cls="flex items-end max-w-xs sm:max-w-md md:max-w-lg flex-row-reverse"
+            ),
+            cls="flex justify-end"
+        ),
+        id="messagesArea",
+        cls="flex-grow p-3 sm:p-4 space-y-3 overflow-y-auto bg-base-200 scrollbar-thin"
+    )
+
+    # --- Chatbox Input Area ---
+    chat_input_area = Div(
+        Div(id="stagedAttachmentsContainer", cls="mb-2 p-2 border border-base-300 rounded-lg bg-base-200 max-h-32 overflow-y-auto scrollbar-thin space-y-2 hidden"),
+        Div(
+            Div( 
+                Button(
+                    Span("add", cls="material-icons emoji-icon text-2xl"), # Changed
+                    id="attachmentButton", tabindex="0", role="button", title="Attach files",
+                    cls="btn btn-ghost btn-circle text-primary"
+                ),
+                Div( 
+                    Button(
+                        Span("image", cls="material-icons emoji-icon"), " Attach Image(s)", # Changed
+                        id="attachImageButton", cls="btn btn-sm btn-ghost justify-start gap-2"
+                    ),
+                    Button(
+                        Span("article", cls="material-icons emoji-icon"), " Attach Document(s)", # Changed
+                        id="attachDocumentButton", cls="btn btn-sm btn-ghost justify-start gap-2"
+                    ),
+                    id="attachmentOptionsContent", tabindex="0",
+                    cls="dropdown-content z-[20] menu p-2 shadow bg-base-100 rounded-box w-56 mb-2"
+                ),
+                id="attachmentOptionsDropdownContainer", cls="dropdown dropdown-top"
+            ),
+            Input(type="file", multiple=True, id="fileInput", cls="hidden"),
+            Textarea(id="chatInput", placeholder="Describe your symptoms here...", cls="textarea textarea-bordered flex-grow resize-none scrollbar-thin", rows="1", style="min-height: 44px; max-height: 120px;"),
+            Button(
+                Span("send", cls="material-icons emoji-icon text-xl"), # Changed
+                id="sendButton", cls="btn btn-primary btn-circle"
+            ),
+            cls="flex items-end space-x-2 sm:space-x-3"
+        ),
+        cls="bg-base-100 p-3 sm:p-4 shadow-inner border-t border-base-300"
+    )
+
+    # --- Left Panel (Chatbox) ---
+    left_panel_chatbox = Div( 
+        Div( 
+            chatbox_header,
+            messages_area,
+            Div(id="messagesEndRef", cls="h-0"), 
+            chat_input_area,
+            id="chatboxRoot",
+            cls="flex flex-col h-full bg-base-100 text-base-content rounded-lg shadow-xl overflow-hidden border border-base-300"
+        ),
+        cls="w-full md:w-2/5 lg:w-1/3 h-1/2 md:h-full flex flex-col" 
+    )
+    
+    # --- Scanner Area (within right panel) ---
+    scanner_main_area_content = Div( 
+        Div( 
+            Button("Start Scan", id="debugStartScanButton", cls="btn btn-sm primary-green-gradient"),
+            Button("Stop Scan", id="debugStopScanButton", cls="btn btn-sm primary-green-gradient"),
+            Button("Narrow Scan", id="debugNarrowScanButton", cls="btn btn-sm primary-green-gradient"),
+            Button("Pulsating Glow", id="debugFullBodyGlowButton", cls="btn btn-sm primary-green-gradient"),
+            cls="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-3 w-full max-w-md px-2"
+        ),
+        Div(
+            Button("Restart Scan", id="restartScanButton", cls="btn btn-outline btn-sm w-full mb-2"),
+            Button(
+                Span("menu_book", cls="material-icons emoji-icon"), " Finish Wellness Journal", # Changed
+                id="finishJournalButton",
+                cls="btn btn-sm w-full flex items-center justify-center gap-2 primary-green-gradient"
+            ),
+            cls="w-full max-w-xs flex flex-col items-center mt-auto" 
+        ),
+        cls="flex flex-col flex-grow p-4 md:p-6 items-center justify-between relative" 
+    )
+
+    # --- Journal Entries Panel (within right panel) ---
+    journal_entries_list_items = [
+        Div(
+            Div(
+                H3("Headache", cls="font-medium text-base-content/90 text-sm"),
+                Span("Medium", cls="text-xs font-semibold px-2 py-0.5 rounded-full border text-yellow-700 border-yellow-400 bg-yellow-100"),
+                cls="flex justify-between items-start mb-1"
+            ),
+            P("Dull ache reported across the forehead area.", cls="text-base-content/80 text-xs mb-1.5 leading-relaxed"),
+            P("5/17/2025", cls="text-base-content/70 text-xs text-right"),
+            cls="bg-base-100/80 backdrop-blur-sm rounded-lg p-3 shadow-md hover:shadow-lg transition-shadow border border-base-300/80"
+        ),
+        Div(
+            Div(
+                H3("Knee Pain (Right)", cls="font-medium text-base-content/90 text-sm"),
+                Span("Low", cls="text-xs font-semibold px-2 py-0.5 rounded-full border text-green-700 border-green-400 bg-green-100"),
+                cls="flex justify-between items-start mb-1"
+            ),
+            P("Slight discomfort in the right knee after physical activity.", cls="text-base-content/80 text-xs mb-1.5 leading-relaxed"),
+            P("5/16/2025", cls="text-base-content/70 text-xs text-right"),
+            cls="bg-base-100/80 backdrop-blur-sm rounded-lg p-3 shadow-md hover:shadow-lg transition-shadow border border-base-300/80"
+        ),
+        Div(
+            Div(
+                H3("Sleep Quality", cls="font-medium text-base-content/90 text-sm"),
+                Span("High", cls="text-xs font-semibold px-2 py-0.5 rounded-full border text-red-700 border-red-400 bg-red-100"),
+                cls="flex justify-between items-start mb-1"
+            ),
+            P("Reports difficulty falling asleep and staying asleep.", cls="text-base-content/80 text-xs mb-1.5 leading-relaxed"),
+            P("5/15/2025", cls="text-base-content/70 text-xs text-right"),
+            cls="bg-base-100/80 backdrop-blur-sm rounded-lg p-3 shadow-md hover:shadow-lg transition-shadow border border-base-300/80"
+        ),
+        Div(
+            Div(
+                H3("Overall Energy", cls="font-medium text-base-content/90 text-sm"),
+                Span("Medium", cls="text-xs font-semibold px-2 py-0.5 rounded-full border text-yellow-700 border-yellow-400 bg-yellow-100"),
+                cls="flex justify-between items-start mb-1"
+            ),
+            P("Feeling generally okay, but some afternoon sluggishness noted.", cls="text-base-content/80 text-xs mb-1.5 leading-relaxed"),
+            P("5/14/2025", cls="text-base-content/70 text-xs text-right"),
+            cls="bg-base-100/80 backdrop-blur-sm rounded-lg p-3 shadow-md hover:shadow-lg transition-shadow border border-base-300/80"
+        ),
+        Div( 
+            Span("warning", id="noJournalIconContainer", cls="material-icons mb-2 text-4xl"), # Changed
+            P("No entries yet.", cls="text-sm"),
+            P("Symptoms you describe will appear here.", cls="text-xs mt-1"),
+            id="noJournalEntries",
+            cls="flex flex-col items-center justify-center h-full text-base-content/70 text-center py-6",
+            style="display: none;"
+        )
+    ]
+    
+    journal_entries_panel = Div( 
+        Div( 
+            H2("Wellness Journal", cls="text-md font-semibold text-center flex-grow"),
+            Button(
+                Span("add", cls="material-icons emoji-icon text-lg"), # Changed
+                id="addManualEntryButton",
+                cls="btn btn-xs btn-circle btn-ghost",
+                title="Add Manual Entry"
+            ),
+            cls="p-3.5 border-b border-primary/60 primary-green-gradient flex justify-between items-center"
+        ),
+        Div( 
+            *journal_entries_list_items,
+            id="journalEntriesList",
+            cls="flex-grow overflow-y-auto p-3 space-y-2.5 scrollbar-thin"
+        ),
+        Div( 
+            Button(
+                Span("delete_sweep", cls="material-icons emoji-icon mr-1"), " Clear All", # Changed
+                id="clearAllJournalButton",
+                cls="btn btn-xs btn-outline btn-error flex items-center gap-1.5",
+                title="Clear all journal entries"
+            ),
+            id="clearJournalContainer",
+            cls="p-2.5 border-t border-primary/30 flex justify-end",
+            style="display: flex;" 
+        ),
+        cls="w-full md:w-2/5 lg:w-1/3 h-full border-l border-primary/30 flex flex-col bg-base-100/50" 
+    )
+
+    # --- Right Panel (Scanner and Journal Root) ---
+    right_panel_scanner_journal_root = Div( 
+        scanner_main_area_content, 
+        journal_entries_panel,     
+        id="scannerJournalRoot",
+        cls="flex flex-col md:flex-row w-full h-full text-base-content rounded-lg shadow-xl overflow-hidden subtle-green-gradient-bg border border-base-300"
+    )
+    
+    right_panel_wrapper = Div( 
+        right_panel_scanner_journal_root,
+        cls="w-full md:w-3/5 lg:w-2/3 h-1/2 md:h-full flex"
+    )
+
+    # --- Main Page Content (Two Panels) ---
+    page_content = Div(
+        left_panel_chatbox,
+        right_panel_wrapper,
+        cls="flex flex-col md:flex-row h-full text-base-content p-2 sm:p-4 gap-2 sm:gap-4 font-sans"
+    )
+
+    # --- Modals ---
+    narrow_scan_modal = Dialog(
+        Div(
+            Form( 
+                Button(
+                    Span("close", cls="material-icons emoji-icon"), # Changed
+                    id="closeNarrowScanModalButton",
+                    cls="btn btn-sm btn-circle btn-ghost absolute right-2 top-2"
+                ),
+                method="dialog"
+            ),
+            H3("Specify Narrow Scan Target", cls="font-bold text-lg mb-3"),
+            Input(type="text", id="narrowScanInput", placeholder="E.g., Head, Lungs, Arm", cls="input input-bordered w-full mb-3"),
+            Button("Confirm & Scan", id="confirmNarrowScanButton", cls="btn btn-primary w-full"),
+            cls="modal-box"
+        ),
+        Form(Button("close"), method="dialog", cls="modal-backdrop"), 
+        id="narrowScanModal", cls="modal"
+    )
+
+    manual_entry_modal = Dialog(
+        Div(
+            Form( 
+                Button(
+                    Span("close", cls="material-icons emoji-icon"), # Changed
+                    id="closeManualEntryModalButton",
+                    cls="btn btn-sm btn-circle btn-ghost absolute right-2 top-2"
+                ),
+                method="dialog"
+            ),
+            H3("Add Manual Journal Entry", cls="font-bold text-lg mb-4"),
+            Form( 
+                Div(
+                    Label("Title / Body Part", For="manualTitle", cls="block text-xs font-medium text-base-content/80 mb-1"),
+                    Input(type="text", id="manualTitle", name="title", placeholder="E.g., Headache, Stomach Ache", cls="input input-bordered input-sm w-full", required=True),
+                    cls="mb-3"
+                ),
+                Div(
+                    Label("Status / Severity", For="manualStatus", cls="block text-xs font-medium text-base-content/80 mb-1"),
+                    Select(
+                        Option("Low", value="1"),
+                        Option("Medium", value="2"),
+                        Option("High", value="3"),
+                        id="manualStatus", name="status", cls="select select-bordered select-sm w-full"
+                    ),
+                    cls="mb-3"
+                ),
+                Div(
+                    Label("Summary / Description", For="manualSummary", cls="block text-xs font-medium text-base-content/80 mb-1"),
+                    Textarea(id="manualSummary", name="summary", placeholder="Describe the issue or feeling...", rows="3", cls="textarea textarea-bordered textarea-sm w-full", required=True),
+                    cls="mb-3"
+                ),
+                Div(
+                    Label("Date", For="manualDate", cls="block text-xs font-medium text-base-content/80 mb-1"),
+                    Input(type="date", id="manualDate", name="date", cls="input input-bordered input-sm w-full", required=True),
+                    cls="mb-4"
+                ),
+                Div(
+                    Button("Cancel", type="button", id="cancelManualEntryButton", cls="btn btn-sm btn-ghost"),
+                    Button("Save Entry", type="submit", id="saveManualEntryButton", cls="btn btn-sm btn-primary"),
+                    cls="flex justify-end gap-2 modal-action mt-0"
+                ),
+                id="manualEntryForm"
+            ),
+            cls="modal-box"
+        ),
+        Form(Button("close"), method="dialog", cls="modal-backdrop"), 
+        id="manualEntryModal", cls="modal"
+    )
+    
+    # --- Overlays ---
+    diary_loading_overlay = Div(
+        Span("refresh", id="diaryLoadingIconContainer", cls="material-icons text-emerald-400 mb-6 text-5xl animate-subtle-spin"), # Changed
+        H2("We are building your health diary...", cls="text-white text-2xl font-semibold mb-3"),
+        P(
+            "Please wait a moment while Akasi.ai compiles your personalized wellness summary.",
+            cls="text-center text-gray-300 text-lg max-w-md"
+        ),
+        id="diaryLoadingOverlay",
+        cls="fixed inset-0 bg-black/70 backdrop-blur-sm z-[100] flex flex-col justify-center items-center p-4 animate-fadeIn",
+        style="display: none;"
+    )
+
+    toast_container = Div(id="toastContainer", cls="toast toast-top toast-center z-[200]")
+
+    full_page_wrapper = Div( 
+        page_content,
+        narrow_scan_modal,
+        manual_entry_modal,
+        diary_loading_overlay,
+        toast_container,
+        cls="h-screen" 
+    )
+
+    return (
+        Title("Wellness Journal - Akasi.ai"),
+        google_material_icons_link, # Added Google Icons link
+        wellness_journal_css_link,
+        full_page_wrapper
+    )
 
 
 
