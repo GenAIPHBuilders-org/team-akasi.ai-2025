@@ -391,6 +391,11 @@ def get(auth):
             cls="grid grid-cols-2 sm:grid-cols-4 gap-2 w-full max-w-md px-2"
         ),
         Div(
+            Button("Light up a single cell", id="debugStartScanButton", cls="btn primary-green-gradient"),
+
+            cls="mt-5"
+        ),        
+        Div(
             scanner_visual_container,
             Div(
                 Div(
