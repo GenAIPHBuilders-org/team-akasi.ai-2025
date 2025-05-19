@@ -69,18 +69,69 @@ app, rt = fast_app(
 wellness_journal_css_link = Link(rel='stylesheet', href='/css/wellness_journal.css')
 google_material_icons_link = Link(href="https://fonts.googleapis.com/icon?family=Material+Icons", rel="stylesheet")
 
+grid_container_width_px = 350
+grid_container_height_px = 500
+grid_square_size_px = 20
+grid_line_color = "rgba(16, 185, 129, 0.3)"
+grid_text_color = "rgba(0, 0, 0, 0.4)"
+grid_font_size = "8px"
+
+grid_pattern_path_d = f"M {grid_square_size_px} 0 L 0 0 0 {grid_square_size_px}"
+
+grid_pattern_svg = Svg(
+    ft_svg('defs',
+        ft_svg('pattern',
+            Path(d=grid_pattern_path_d, fill="none", stroke=grid_line_color, stroke_width="0.5"),
+            id="gridPattern",
+            width=str(grid_square_size_px),
+            height=str(grid_square_size_px),
+            patternUnits="userSpaceOnUse"
+        )
+    ),
+    Rect(width="100%", height="100%", fill="url(#gridPattern)"),
+    width=f"{grid_container_width_px}px",
+    height=f"{grid_container_height_px}px",
+    style="position: absolute; top: 0; left: 0; z-index: 1;"
+)
+
+grid_text_elements = []
+cell_number = 1
+for y_coord in range(0, grid_container_height_px, grid_square_size_px):
+    for x_coord in range(0, grid_container_width_px, grid_square_size_px):
+        if y_coord + grid_square_size_px <= grid_container_height_px:
+            text_x = x_coord + (grid_square_size_px / 2)
+            text_y = y_coord + (grid_square_size_px / 2)
+            grid_text_elements.append(
+                Text(
+                    str(cell_number),
+                    x=str(text_x),
+                    y=str(text_y),
+                    fill=grid_text_color,
+                    font_size=grid_font_size,
+                    text_anchor="middle",
+                    dominant_baseline="middle"
+                )
+            )
+            cell_number += 1
+
+grid_numbers_svg = Svg(
+    *grid_text_elements,
+    width=f"{grid_container_width_px}px",
+    height=f"{grid_container_height_px}px",
+    style="position: absolute; top: 0; left: 0; z-index: 1.5; pointer-events: none;"
+)
+
 
 @rt('/onboarding/wellness-journal')
 def get(auth):
-    if auth is None: 
+    if auth is None:
         return RedirectResponse('/login', status_code=303)
-    
-    # --- Chatbox Header ---
+
     chatbox_header = Header(
         H1("Akasi.ai Chat", cls="text-lg sm:text-xl font-semibold text-center"),
         Div(
             Button(
-                Span("refresh", cls="material-icons emoji-icon mr-1"), " Clear Chat", # Changed
+                Span("refresh", cls="material-icons emoji-icon mr-1"), " Clear Chat",
                 id="clearChatButton",
                 cls="btn btn-xs bg-white/20 hover:bg-white/30 border-none flex items-center gap-1",
                 title="Clear chat history"
@@ -103,18 +154,17 @@ def get(auth):
         cls="p-3.5 sm:p-4 shadow-md primary-green-gradient flex flex-col items-center"
     )
 
-    # --- Chatbox Messages Area (with example messages) ---
     messages_area = Div(
         Div(
             Div(
-                Div( 
+                Div(
                     Div(
-                        Span("smart_toy", cls="material-icons emoji-icon"), # Changed
+                        Span("smart_toy", cls="material-icons emoji-icon"),
                         cls="bg-transparent text-neutral-content rounded-full w-8 h-8 text-sm flex items-center justify-center"
                     ),
                     cls="avatar placeholder p-0 w-8 h-8 rounded-full mr-2 bg-base-300"
                 ),
-                Div( 
+                Div(
                     P("This is the first AI response.", cls="text-sm leading-relaxed chat-message-text"),
                     cls="chat-bubble chat-bubble-neutral bg-base-300 text-base-content rounded-bl-none shadow-md"
                 ),
@@ -124,14 +174,14 @@ def get(auth):
         ),
         Div(
             Div(
-                Div( 
+                Div(
                     Div(
-                        Span("person", cls="material-icons emoji-icon"), # Changed
+                        Span("person", cls="material-icons emoji-icon"),
                         cls="bg-transparent text-neutral-content rounded-full w-8 h-8 text-sm flex items-center justify-center"
                     ),
                     cls="avatar placeholder p-0 w-8 h-8 rounded-full ml-2 user-message-gradient"
                 ),
-                Div( 
+                Div(
                     P("Hello Akasi!", cls="text-sm leading-relaxed chat-message-text"),
                     cls="chat-bubble chat-bubble-primary user-message-gradient rounded-br-none shadow-md"
                 ),
@@ -141,14 +191,14 @@ def get(auth):
         ),
         Div(
             Div(
-                Div( 
+                Div(
                     Div(
-                        Span("smart_toy", cls="material-icons emoji-icon"), # Changed
+                        Span("smart_toy", cls="material-icons emoji-icon"),
                         cls="bg-transparent text-neutral-content rounded-full w-8 h-8 text-sm flex items-center justify-center"
                     ),
                     cls="avatar placeholder p-0 w-8 h-8 rounded-full mr-2 bg-base-300"
                 ),
-                Div( 
+                Div(
                     P("Here's a response to your query about images.", cls="text-sm leading-relaxed chat-message-text"),
                     cls="chat-bubble chat-bubble-neutral bg-base-300 text-base-content rounded-bl-none shadow-md"
                 ),
@@ -158,16 +208,16 @@ def get(auth):
         ),
         Div(
             Div(
-                Div( 
+                Div(
                     Div(
-                        Span("person", cls="material-icons emoji-icon"), # Changed
+                        Span("person", cls="material-icons emoji-icon"),
                         cls="bg-transparent text-neutral-content rounded-full w-8 h-8 text-sm flex items-center justify-center"
                     ),
                     cls="avatar placeholder p-0 w-8 h-8 rounded-full ml-2 user-message-gradient"
                 ),
-                Div( 
+                Div(
                     P("Okay, check out these images.", cls="text-sm leading-relaxed chat-message-text"),
-                    Div( 
+                    Div(
                         Div(
                             Div(
                                 Img(src="https://placehold.co/100x75/A7F3D0/10B981?text=Img1", alt="Attached image 1", cls="rounded max-w-full h-auto max-h-32 object-contain", onerror="this.onerror=null; this.src='https://placehold.co/100x75/FEE2E2/DC2626?text=Error';"),
@@ -199,14 +249,14 @@ def get(auth):
         ),
         Div(
             Div(
-                Div( 
+                Div(
                     Div(
-                        Span("smart_toy", cls="material-icons emoji-icon"), # Changed
+                        Span("smart_toy", cls="material-icons emoji-icon"),
                         cls="bg-transparent text-neutral-content rounded-full w-8 h-8 text-sm flex items-center justify-center"
                     ),
                     cls="avatar placeholder p-0 w-8 h-8 rounded-full mr-2 bg-base-300"
                 ),
-                Div( 
+                Div(
                     P("Understood. And for the documents?", cls="text-sm leading-relaxed chat-message-text"),
                     cls="chat-bubble chat-bubble-neutral bg-base-300 text-base-content rounded-bl-none shadow-md"
                 ),
@@ -216,19 +266,19 @@ def get(auth):
         ),
         Div(
             Div(
-                Div( 
+                Div(
                     Div(
-                        Span("person", cls="material-icons emoji-icon"), # Changed
+                        Span("person", cls="material-icons emoji-icon"),
                         cls="bg-transparent text-neutral-content rounded-full w-8 h-8 text-sm flex items-center justify-center"
                     ),
                     cls="avatar placeholder p-0 w-8 h-8 rounded-full ml-2 user-message-gradient"
                 ),
-                Div( 
+                Div(
                     P("And here are some PDF documents.", cls="text-sm leading-relaxed chat-message-text"),
-                    Div( 
+                    Div(
                         Div(
                             Div(
-                                Span("attachment", cls="material-icons emoji-icon text-xl text-primary flex-shrink-0"), # Changed
+                                Span("attachment", cls="material-icons emoji-icon text-xl text-primary flex-shrink-0"),
                                 Div(
                                     P("lab_results_q1.pdf", cls="text-xs font-medium text-base-content/90 truncate"),
                                     P("256 KB", cls="text-xs text-base-content/70"),
@@ -240,7 +290,7 @@ def get(auth):
                         ),
                         Div(
                             Div(
-                                Span("attachment", cls="material-icons emoji-icon text-xl text-primary flex-shrink-0"), # Changed
+                                Span("attachment", cls="material-icons emoji-icon text-xl text-primary flex-shrink-0"),
                                 Div(
                                     P("medical_history_summary.pdf", cls="text-xs font-medium text-base-content/90 truncate"),
                                     P("512 KB", cls="text-xs text-base-content/70"),
@@ -252,7 +302,7 @@ def get(auth):
                         ),
                         Div(
                             Div(
-                                Span("attachment", cls="material-icons emoji-icon text-xl text-primary flex-shrink-0"), # Changed
+                                Span("attachment", cls="material-icons emoji-icon text-xl text-primary flex-shrink-0"),
                                 Div(
                                     P("prescription_details.pdf", cls="text-xs font-medium text-base-content/90 truncate"),
                                     P("128 KB", cls="text-xs text-base-content/70"),
@@ -274,23 +324,22 @@ def get(auth):
         cls="flex-grow p-3 sm:p-4 space-y-3 overflow-y-auto bg-base-200 scrollbar-thin"
     )
 
-    # --- Chatbox Input Area ---
     chat_input_area = Div(
         Div(id="stagedAttachmentsContainer", cls="mb-2 p-2 border border-base-300 rounded-lg bg-base-200 max-h-32 overflow-y-auto scrollbar-thin space-y-2 hidden"),
         Div(
-            Div( 
+            Div(
                 Button(
-                    Span("add", cls="material-icons emoji-icon text-2xl"), # Changed
+                    Span("add", cls="material-icons emoji-icon text-2xl"),
                     id="attachmentButton", tabindex="0", role="button", title="Attach files",
                     cls="btn btn-ghost btn-circle text-primary"
                 ),
-                Div( 
+                Div(
                     Button(
-                        Span("image", cls="material-icons emoji-icon"), " Attach Image(s)", # Changed
+                        Span("image", cls="material-icons emoji-icon"), " Attach Image(s)",
                         id="attachImageButton", cls="btn btn-sm btn-ghost justify-start gap-2"
                     ),
                     Button(
-                        Span("article", cls="material-icons emoji-icon"), " Attach Document(s)", # Changed
+                        Span("article", cls="material-icons emoji-icon"), " Attach Document(s)",
                         id="attachDocumentButton", cls="btn btn-sm btn-ghost justify-start gap-2"
                     ),
                     id="attachmentOptionsContent", tabindex="0",
@@ -301,7 +350,7 @@ def get(auth):
             Input(type="file", multiple=True, id="fileInput", cls="hidden"),
             Textarea(id="chatInput", placeholder="Describe your symptoms here...", cls="textarea textarea-bordered flex-grow resize-none scrollbar-thin", rows="1", style="min-height: 44px; max-height: 120px;"),
             Button(
-                Span("send", cls="material-icons emoji-icon text-xl"), # Changed
+                Span("send", cls="material-icons emoji-icon text-xl"),
                 id="sendButton", cls="btn btn-primary btn-circle"
             ),
             cls="flex items-end space-x-2 sm:space-x-3"
@@ -309,41 +358,63 @@ def get(auth):
         cls="bg-base-100 p-3 sm:p-4 shadow-inner border-t border-base-300"
     )
 
-    # --- Left Panel (Chatbox) ---
-    left_panel_chatbox = Div( 
-        Div( 
+    left_panel_chatbox = Div(
+        Div(
             chatbox_header,
             messages_area,
-            Div(id="messagesEndRef", cls="h-0"), 
+            Div(id="messagesEndRef", cls="h-0"),
             chat_input_area,
             id="chatboxRoot",
             cls="flex flex-col h-full bg-base-100 text-base-content rounded-lg shadow-xl overflow-hidden border border-base-300"
         ),
-        cls="w-full md:w-2/5 lg:w-1/3 h-1/2 md:h-full flex flex-col" 
+        cls="w-full md:w-2/5 lg:w-1/3 h-1/2 md:h-full flex flex-col"
     )
-    
-    # --- Scanner Area (within right panel) ---
-    scanner_main_area_content = Div( 
-        Div( 
-            Button("Start Scan", id="debugStartScanButton", cls="btn btn-sm primary-green-gradient"),
-            Button("Stop Scan", id="debugStopScanButton", cls="btn btn-sm primary-green-gradient"),
-            Button("Narrow Scan", id="debugNarrowScanButton", cls="btn btn-sm primary-green-gradient"),
-            Button("Pulsating Glow", id="debugFullBodyGlowButton", cls="btn btn-sm primary-green-gradient"),
-            cls="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-3 w-full max-w-md px-2"
+
+    scanner_visual_container = Div(
+        grid_pattern_svg,
+        grid_numbers_svg,
+        Img(src="/human-body.svg",
+            alt="Human body figure",
+            cls="object-contain w-full h-full p-2",
+            style="position: relative; z-index: 2;"
+        ),
+        cls="border-2 border-emerald-500 rounded-lg bg-white/10 flex items-center justify-center relative overflow-hidden",
+        style=f"width: {grid_container_width_px}px; height: {grid_container_height_px}px;"
+    )
+
+    scanner_main_area_content = Div(
+        Div(
+            Button("Start Scan", id="debugStartScanButton", cls="btn primary-green-gradient"),
+            Button("Stop Scan", id="debugStopScanButton", cls="btn primary-green-gradient"),
+            Button("Narrow Scan", id="debugNarrowScanButton", cls="btn primary-green-gradient"),
+            Button("Full Body Glow", id="debugFullBodyGlowButton", cls="btn primary-green-gradient"),
+            cls="grid grid-cols-2 sm:grid-cols-4 gap-2 w-full max-w-md px-2"
+        ),
+        Div(
+            scanner_visual_container,
+            Div(
+                Div(
+                    P("Scanner idle. Describe symptoms or restart. ", id="scannerStatusText", cls="text-base-content text-sm"),
+                    Span("💤", id="scannerStatusIconContainer", cls="mt-1 text-xl text-primary  h-6 w-6 flex items-center justify-center"),
+                    id="scannerStatusContainer",
+                    cls="flex flex-col items-center justify-center h-full"
+                ),
+                cls="text-center h-10 w-full max-w-xs mb-3 mt-6" # mb-3 provides some space above bottom buttons
+            ),
+            cls="flex flex-col items-center justify-center flex-grow w-full " # This wrapper grows and centers its content
         ),
         Div(
             Button("Restart Scan", id="restartScanButton", cls="btn btn-outline btn-sm w-full mb-2"),
             Button(
-                Span("menu_book", cls="material-icons emoji-icon"), " Finish Wellness Journal", # Changed
+                Span("menu_book", cls="material-icons emoji-icon"), " Finish Wellness Journal",
                 id="finishJournalButton",
                 cls="btn btn-sm w-full flex items-center justify-center gap-2 primary-green-gradient"
             ),
-            cls="w-full max-w-xs flex flex-col items-center mt-auto" 
+            cls="w-full max-w-xs flex flex-col items-center"
         ),
-        cls="flex flex-col flex-grow p-4 md:p-6 items-center justify-between relative" 
+        cls="flex flex-col flex-grow h-full p-4 md:p-6 items-center justify-between relative"
     )
 
-    # --- Journal Entries Panel (within right panel) ---
     journal_entries_list_items = [
         Div(
             Div(
@@ -385,8 +456,8 @@ def get(auth):
             P("5/14/2025", cls="text-base-content/70 text-xs text-right"),
             cls="bg-base-100/80 backdrop-blur-sm rounded-lg p-3 shadow-md hover:shadow-lg transition-shadow border border-base-300/80"
         ),
-        Div( 
-            Span("warning", id="noJournalIconContainer", cls="material-icons mb-2 text-4xl"), # Changed
+        Div(
+            Span("warning", id="noJournalIconContainer", cls="material-icons mb-2 text-4xl"),
             P("No entries yet.", cls="text-sm"),
             P("Symptoms you describe will appear here.", cls="text-xs mt-1"),
             id="noJournalEntries",
@@ -394,63 +465,60 @@ def get(auth):
             style="display: none;"
         )
     ]
-    
-    journal_entries_panel = Div( 
-        Div( 
+
+    journal_entries_panel = Div(
+        Div(
             H2("Wellness Journal", cls="text-md font-semibold text-center flex-grow"),
             Button(
-                Span("add", cls="material-icons emoji-icon text-lg"), # Changed
+                Span("add", cls="material-icons emoji-icon text-lg"),
                 id="addManualEntryButton",
                 cls="btn btn-xs btn-circle btn-ghost",
                 title="Add Manual Entry"
             ),
             cls="p-3.5 border-b border-primary/60 primary-green-gradient flex justify-between items-center"
         ),
-        Div( 
+        Div(
             *journal_entries_list_items,
             id="journalEntriesList",
             cls="flex-grow overflow-y-auto p-3 space-y-2.5 scrollbar-thin"
         ),
-        Div( 
+        Div(
             Button(
-                Span("delete_sweep", cls="material-icons emoji-icon mr-1"), " Clear All", # Changed
+                Span("delete_sweep", cls="material-icons emoji-icon mr-1"), " Clear All",
                 id="clearAllJournalButton",
                 cls="btn btn-xs btn-outline btn-error flex items-center gap-1.5",
                 title="Clear all journal entries"
             ),
             id="clearJournalContainer",
             cls="p-2.5 border-t border-primary/30 flex justify-end",
-            style="display: flex;" 
+            style="display: flex;"
         ),
-        cls="w-full md:w-2/5 lg:w-1/3 h-full border-l border-primary/30 flex flex-col bg-base-100/50" 
+        cls="w-full md:w-2/5 lg:w-1/3 h-full border-l border-primary/30 flex flex-col bg-base-100/50"
     )
 
-    # --- Right Panel (Scanner and Journal Root) ---
-    right_panel_scanner_journal_root = Div( 
-        scanner_main_area_content, 
-        journal_entries_panel,     
+    right_panel_scanner_journal_root = Div(
+        scanner_main_area_content,
+        journal_entries_panel,
         id="scannerJournalRoot",
         cls="flex flex-col md:flex-row w-full h-full text-base-content rounded-lg shadow-xl overflow-hidden subtle-green-gradient-bg border border-base-300"
     )
-    
-    right_panel_wrapper = Div( 
+
+    right_panel_wrapper = Div(
         right_panel_scanner_journal_root,
         cls="w-full md:w-3/5 lg:w-2/3 h-1/2 md:h-full flex"
     )
 
-    # --- Main Page Content (Two Panels) ---
     page_content = Div(
         left_panel_chatbox,
         right_panel_wrapper,
         cls="flex flex-col md:flex-row h-full text-base-content p-2 sm:p-4 gap-2 sm:gap-4 font-sans"
     )
 
-    # --- Modals ---
     narrow_scan_modal = Dialog(
         Div(
-            Form( 
+            Form(
                 Button(
-                    Span("close", cls="material-icons emoji-icon"), # Changed
+                    Span("close", cls="material-icons emoji-icon"),
                     id="closeNarrowScanModalButton",
                     cls="btn btn-sm btn-circle btn-ghost absolute right-2 top-2"
                 ),
@@ -461,22 +529,22 @@ def get(auth):
             Button("Confirm & Scan", id="confirmNarrowScanButton", cls="btn btn-primary w-full"),
             cls="modal-box"
         ),
-        Form(Button("close"), method="dialog", cls="modal-backdrop"), 
+        Form(Button("close"), method="dialog", cls="modal-backdrop"),
         id="narrowScanModal", cls="modal"
     )
 
     manual_entry_modal = Dialog(
         Div(
-            Form( 
+            Form(
                 Button(
-                    Span("close", cls="material-icons emoji-icon"), # Changed
+                    Span("close", cls="material-icons emoji-icon"),
                     id="closeManualEntryModalButton",
                     cls="btn btn-sm btn-circle btn-ghost absolute right-2 top-2"
                 ),
                 method="dialog"
             ),
             H3("Add Manual Journal Entry", cls="font-bold text-lg mb-4"),
-            Form( 
+            Form(
                 Div(
                     Label("Title / Body Part", For="manualTitle", cls="block text-xs font-medium text-base-content/80 mb-1"),
                     Input(type="text", id="manualTitle", name="title", placeholder="E.g., Headache, Stomach Ache", cls="input input-bordered input-sm w-full", required=True),
@@ -511,13 +579,12 @@ def get(auth):
             ),
             cls="modal-box"
         ),
-        Form(Button("close"), method="dialog", cls="modal-backdrop"), 
+        Form(Button("close"), method="dialog", cls="modal-backdrop"),
         id="manualEntryModal", cls="modal"
     )
-    
-    # --- Overlays ---
+
     diary_loading_overlay = Div(
-        Span("refresh", id="diaryLoadingIconContainer", cls="material-icons text-emerald-400 mb-6 text-5xl animate-subtle-spin"), # Changed
+        Span("refresh", id="diaryLoadingIconContainer", cls="material-icons text-emerald-400 mb-6 text-5xl animate-subtle-spin"),
         H2("We are building your health diary...", cls="text-white text-2xl font-semibold mb-3"),
         P(
             "Please wait a moment while Akasi.ai compiles your personalized wellness summary.",
@@ -530,22 +597,21 @@ def get(auth):
 
     toast_container = Div(id="toastContainer", cls="toast toast-top toast-center z-[200]")
 
-    full_page_wrapper = Div( 
+    full_page_wrapper = Div(
         page_content,
         narrow_scan_modal,
         manual_entry_modal,
         diary_loading_overlay,
         toast_container,
-        cls="h-screen" 
+        cls="h-screen"
     )
 
     return (
         Title("Wellness Journal - Akasi.ai"),
-        google_material_icons_link, # Added Google Icons link
+        google_material_icons_link,
         wellness_journal_css_link,
         full_page_wrapper
     )
-
 
 
 # Landing Page
