@@ -1,6 +1,6 @@
 import datetime
 from datetime import datetime 
-from fasthtml.svg import *
+from fasthtml.svg import Svg, Defs, Pattern, Path, Rect, Text, NotStr, Ellipse, Circle, Group, G
 from fasthtml.common import *
 # Ensure all necessary SVG elements are imported
 from supabase import create_client, Client
@@ -10,6 +10,8 @@ from pathlib import Path
 import json
 from services.sb_user_services import fetch_user_profile # Assuming this path is correct relative to your project structure
 from fasthtml.core import RedirectResponse
+
+
 
 
 # --- Configuration ---
@@ -68,64 +70,140 @@ app, rt = fast_app(
 # This link will be used in the route
 wellness_journal_css_link = Link(rel='stylesheet', href='/css/wellness_journal.css')
 google_material_icons_link = Link(href="https://fonts.googleapis.com/icon?family=Material+Icons", rel="stylesheet")
-
-grid_container_width_px = 350
-grid_container_height_px = 500
-grid_square_size_px = 20
-grid_line_color = "rgba(16, 185, 129, 0.3)"
-grid_text_color = "rgba(0, 0, 0, 0.4)"
-grid_font_size = "8px"
-
-grid_pattern_path_d = f"M {grid_square_size_px} 0 L 0 0 0 {grid_square_size_px}"
-
-grid_pattern_svg = Svg(
-    ft_svg('defs',
-        ft_svg('pattern',
-            Path(d=grid_pattern_path_d, fill="none", stroke=grid_line_color, stroke_width="0.5"),
-            id="gridPattern",
-            width=str(grid_square_size_px),
-            height=str(grid_square_size_px),
-            patternUnits="userSpaceOnUse"
-        )
-    ),
-    Rect(width="100%", height="100%", fill="url(#gridPattern)"),
-    width=f"{grid_container_width_px}px",
-    height=f"{grid_container_height_px}px",
-    style="position: absolute; top: 0; left: 0; z-index: 1;"
-)
-
-grid_text_elements = []
-cell_number = 1
-for y_coord in range(0, grid_container_height_px, grid_square_size_px):
-    for x_coord in range(0, grid_container_width_px, grid_square_size_px):
-        if y_coord + grid_square_size_px <= grid_container_height_px:
-            text_x = x_coord + (grid_square_size_px / 2)
-            text_y = y_coord + (grid_square_size_px / 2)
-            grid_text_elements.append(
-                Text(
-                    str(cell_number),
-                    x=str(text_x),
-                    y=str(text_y),
-                    fill=grid_text_color,
-                    font_size=grid_font_size,
-                    text_anchor="middle",
-                    dominant_baseline="middle"
-                )
-            )
-            cell_number += 1
-
-grid_numbers_svg = Svg(
-    *grid_text_elements,
-    width=f"{grid_container_width_px}px",
-    height=f"{grid_container_height_px}px",
-    style="position: absolute; top: 0; left: 0; z-index: 1.5; pointer-events: none;"
-)
+wellness_enhancements_js_link = Script(src="/js/wellness_enhancements.js", defer=True)
 
 
+# Raw SVG string for the filter definition (from fasthtml_raw_scan_line_add_py)
+scan_line_svg_defs_raw_string = """
+<defs>
+  <filter id="scanGlowGreenAnimation">
+    <feGaussianBlur stdDeviation="1.2" result="coloredBlur"/>
+    <feMerge>
+      <feMergeNode in="coloredBlur"/>
+      <feMergeNode in="SourceGraphic"/>
+    </feMerge>
+  </filter>
+</defs>
+"""
+
+# Raw SVG string for the scan line group itself
+scan_line_group_raw_string = """
+<g id="scanLineAnimationGroupRaw" style="display: none;">
+  <line id="scanLineAnimationElementRaw" x1="10" y1="0" x2="90" y2="0" stroke="#10B981" stroke-width="2" stroke-opacity="0.8" filter="url(#scanGlowGreenAnimation)" stroke-dasharray="5 3">
+    <animate attributeName="strokeOpacity" values="0.8;0.3;0.8" dur="1.2s" repeatCount="indefinite" />
+  </line>
+  <rect id="scanLineHighlightAnimationElementRaw" x="10" y="-2.5" width="80" height="5" fill="#10B981" opacity="0.15" filter="url(#scanGlowGreenAnimation)" />
+</g>
+"""
+
+# --- Main Body SVG FT Component ---
+# This function will create the main annotated SVG body using FastHTML components
+
+def create_main_anatomy_svg():
+    # Define default styles for clarity and to ensure they are applied
+    default_body_fill = "#97979795"  # Light grey for external parts
+    default_body_stroke = "#333333" # Dark grey/black outline
+    default_stroke_width = "1px"
+
+    internal_organ_fill = "#e57373" # Reddish for lungs
+    internal_organ_stroke = "#c62828" # Darker red stroke for lungs
+    internal_organ_fill_opacity = "0.7"
+
+    heart_fill = "#d32f2f" # Specific deep red for heart
+    heart_stroke = internal_organ_stroke # Consistent stroke with other internal organs
+
+    return Svg(
+        G( # Head
+            Ellipse(cx="100", cy="40", rx="35", ry="30", fill=default_body_fill, stroke=default_body_stroke, stroke_width=default_stroke_width),
+            id="head_group", cls="body-part", data_name="Head", data_info="The head contains the brain, eyes, ears, nose, and mouth. It is crucial for sensory input and cognitive functions."
+        ),
+        G( # Neck
+            Rect(x="90", y="70", width="20", height="15", rx="2", fill=default_body_fill, stroke=default_body_stroke, stroke_width=default_stroke_width),
+            id="neck_group", cls="body-part", data_name="Neck", data_info="The neck connects the head to the torso and houses the cervical spine, esophagus, and trachea."
+        ),
+        G( # Thorax
+            Rect(x="60", y="85", width="80", height="75", rx="10", fill=default_body_fill, stroke=default_body_stroke, stroke_width=default_stroke_width),
+            id="thorax_group", cls="body-part", data_name="Thorax (Chest)", data_info="The thorax, or chest, is the part of the torso between the neck and the abdomen. It houses the heart and lungs."
+        ),
+        G( # Lungs
+            Ellipse(cx="85", cy="115", rx="18", ry="25", fill=internal_organ_fill, stroke=internal_organ_stroke, stroke_width=default_stroke_width, fill_opacity=internal_organ_fill_opacity),
+            Ellipse(cx="115", cy="115", rx="18", ry="25", fill=internal_organ_fill, stroke=internal_organ_stroke, stroke_width=default_stroke_width, fill_opacity=internal_organ_fill_opacity),
+            id="lungs_group", cls="body-part internal-organ", data_name="Lungs", data_info="The lungs are the primary organs of the respiratory system, responsible for oxygenating blood."
+        ),
+        G( # Heart
+            Ellipse(cx="100", cy="120", rx="15", ry="15", style=f"fill: {heart_fill};", stroke=heart_stroke, stroke_width=default_stroke_width, fill_opacity=internal_organ_fill_opacity), # Retain specific heart fill, add stroke
+            id="heart_group", cls="body-part internal-organ", data_name="Heart", data_info="The heart is a muscular organ that pumps blood throughout the body via the circulatory system."
+        ),
+        G( # Abdominal and Pelvic Region
+            Rect(x="60", y="160", width="80", height="60", rx="10", fill=default_body_fill, stroke=default_body_stroke, stroke_width=default_stroke_width),
+            id="abdominal_pelvic_region_group", cls="body-part", data_name="Abdominal and Pelvic Region", data_info="This region includes the abdomen and pelvis. It houses major organs of the digestive, urinary, and reproductive systems (e.g., stomach, intestines, liver, kidneys, bladder, reproductive organs)."
+        ),
+        G( # Left Shoulder
+            Circle(cx="60", cy="95", r="12", fill=default_body_fill, stroke=default_body_stroke, stroke_width=default_stroke_width),
+            id="left_shoulder_group", cls="body-part", data_name="Left Shoulder", data_info="The left shoulder joint connects the left arm to the torso."
+        ),
+        G( # Right Shoulder
+            Circle(cx="140", cy="95", r="12", fill=default_body_fill, stroke=default_body_stroke, stroke_width=default_stroke_width),
+            id="right_shoulder_group", cls="body-part", data_name="Right Shoulder", data_info="The right shoulder joint connects the right arm to the torso."
+        ),
+        G( # Left Arm
+            Rect(x="25", y="95", width="30", height="70", rx="5", fill=default_body_fill, stroke=default_body_stroke, stroke_width=default_stroke_width),
+            id="left_arm_group", cls="body-part", data_name="Left Arm", data_info="The left arm is used for reaching, grasping, and interacting with the environment."
+        ),
+        G( # Right Arm
+            Rect(x="145", y="95", width="30", height="70", rx="5", fill=default_body_fill, stroke=default_body_stroke, stroke_width=default_stroke_width),
+            id="right_arm_group", cls="body-part", data_name="Right Arm", data_info="The right arm, similar to the left, facilitates interaction and manipulation of objects."
+        ),
+        G( # Left Hand
+            Ellipse(cx="40", cy="170", rx="12", ry="8", fill=default_body_fill, stroke=default_body_stroke, stroke_width=default_stroke_width),
+            id="left_hand_group", cls="body-part", data_name="Left Hand", data_info="The left hand is at the end of the left arm, used for manipulation."
+        ),
+        G( # Right Hand
+            Ellipse(cx="160", cy="170", rx="12", ry="8", fill=default_body_fill, stroke=default_body_stroke, stroke_width=default_stroke_width),
+            id="right_hand_group", cls="body-part", data_name="Right Hand", data_info="The right hand is at the end of the right arm, used for manipulation."
+        ),
+        G( # Left Leg
+            Rect(x="70", y="220", width="25", height="70", rx="5", fill=default_body_fill, stroke=default_body_stroke, stroke_width=default_stroke_width),
+            id="left_leg_group", cls="body-part", data_name="Left Leg", data_info="The left leg supports the body and enables locomotion."
+        ),
+        G( # Right Leg
+            Rect(x="105", y="220", width="25", height="70", rx="5", fill=default_body_fill, stroke=default_body_stroke, stroke_width=default_stroke_width),
+            id="right_leg_group", cls="body-part", data_name="Right Leg", data_info="The right leg provides support and mobility."
+        ),
+        G( # Left Foot
+            Ellipse(cx="82.5", cy="295", rx="15", ry="8", fill=default_body_fill, stroke=default_body_stroke, stroke_width=default_stroke_width),
+            id="left_foot_group", cls="body-part", data_name="Left Foot", data_info="The left foot is at the end of the left leg, crucial for standing and walking."
+        ),
+        G( # Right Foot
+            Ellipse(cx="117.5", cy="295", rx="15", ry="8", fill=default_body_fill, stroke=default_body_stroke, stroke_width=default_stroke_width),
+            id="right_foot_group", cls="body-part", data_name="Right Foot", data_info="The right foot is at the end of the right leg, crucial for standing and walking."
+        ),
+        # Main SVG attributes
+        id="mainAnatomySvgFT", 
+        viewBox="0 -70 200 450", # viewBox adjusted for centering
+        xmlns="http://www.w3.org/2000/svg",
+        cls="object-contain w-full h-full p-2", 
+        style="position: relative; z-index: 2; background-color: #f8fafc; border: 1px solid #e2e8f0;" 
+    )
+
+
+
+main_anatomy_svg_ft = create_main_anatomy_svg()
 @rt('/onboarding/wellness-journal')
 def get(auth):
     if auth is None:
         return RedirectResponse('/login', status_code=303)
+
+    scan_line_svg_overlay_raw = Svg(
+        NotStr(scan_line_svg_defs_raw_string), 
+        NotStr(scan_line_group_raw_string),   
+        id="scanLineSvgOverlayRaw",         
+        viewBox="0 0 100 200",              
+        width="100%",                       
+        height="100%",                      
+        style="position: absolute; top: 0; left: 0; z-index: 3; pointer-events: none;" 
+    )
+
 
     chatbox_header = Header(
         H1("Akasi.ai Chat", cls="text-lg sm:text-xl font-semibold text-center"),
@@ -371,30 +449,30 @@ def get(auth):
     )
 
     scanner_visual_container = Div(
-        grid_pattern_svg,
-        grid_numbers_svg,
-        Img(src="/human-body.svg",
-            alt="Human body figure",
-            cls="object-contain w-full h-full p-2",
-            style="position: relative; z-index: 2;"
-        ),
+
+        main_anatomy_svg_ft,
+        scan_line_svg_overlay_raw,
         cls="border-2 border-emerald-500 rounded-lg bg-white/10 flex items-center justify-center relative overflow-hidden",
-        style=f"width: {grid_container_width_px}px; height: {grid_container_height_px}px;"
+        style=f"width: 350px; height: 500px;"
     )
+
 
     scanner_main_area_content = Div(
         Div(
-            Button("Start Scan", id="debugStartScanButton", cls="btn primary-green-gradient"),
-            Button("Stop Scan", id="debugStopScanButton", cls="btn primary-green-gradient"),
-            Button("Narrow Scan", id="debugNarrowScanButton", cls="btn primary-green-gradient"),
-            Button("Full Body Glow", id="debugFullBodyGlowButton", cls="btn primary-green-gradient"),
+            Button("Start Scan", id="debugStartScanButton", cls="btn primary-green-gradient",
+                hx_get="/trigger_body_scan_animation_script", hx_target="#script_runner_area", hx_swap="innerHTML"),
+
+            Button("Stop Scan", id="debugStopScanButton", cls="btn primary-green-gradient",
+                hx_get="/trigger_stop_body_scan_script", hx_target="#script_runner_area", hx_swap="innerHTML"),
+
+            Button("Narrow Scan", id="debugNarrowScanButton", cls="btn primary-green-gradient",
+            hx_get="/js_show_narrow_scan_modal", hx_target="#script_runner_area", hx_swap="innerHTML"),
+
+            Button("Full Body Glow", id="debugFullBodyGlowButton", cls="btn primary-green-gradient",
+                hx_get="/trigger_body_glow_script", hx_target="#script_runner_area", hx_swap="innerHTML"),
+
             cls="grid grid-cols-2 sm:grid-cols-4 gap-2 w-full max-w-md px-2"
         ),
-        Div(
-            Button("Light up a single cell", id="debugStartScanButton", cls="btn primary-green-gradient"),
-
-            cls="mt-5"
-        ),        
         Div(
             scanner_visual_container,
             Div(
@@ -419,6 +497,9 @@ def get(auth):
         ),
         cls="flex flex-col flex-grow h-full p-4 md:p-6 items-center justify-between relative"
     )
+
+
+
 
     journal_entries_list_items = [
         Div(
@@ -601,6 +682,7 @@ def get(auth):
     )
 
     toast_container = Div(id="toastContainer", cls="toast toast-top toast-center z-[200]")
+    script_runner_area = Div(id="script_runner_area")
 
     full_page_wrapper = Div(
         page_content,
@@ -608,6 +690,7 @@ def get(auth):
         manual_entry_modal,
         diary_loading_overlay,
         toast_container,
+        script_runner_area, 
         cls="h-screen"
     )
 
@@ -615,8 +698,88 @@ def get(auth):
         Title("Wellness Journal - Akasi.ai"),
         google_material_icons_link,
         wellness_journal_css_link,
+        wellness_enhancements_js_link,
         full_page_wrapper
     )
+
+
+
+
+# --- HTMX UI ROUTES / FUNCTIONS  ---
+
+@rt("/trigger_body_scan_animation_script")
+def get_trigger_body_scan_animation_script():
+    js_code = """
+    (() => {
+        if (typeof startBodyScanAnimation === 'function') {
+            startBodyScanAnimation();
+        } else {
+            console.error('startBodyScanAnimation function not defined in wellness_enhancements.js');
+        }
+    })();
+    """
+    return Script(js_code)
+
+@rt("/trigger_stop_body_scan_script")
+def get_trigger_stop_body_scan_script():
+    js_code = """
+    (() => {
+        if (typeof stopBodyScanAnimation === 'function') {
+            stopBodyScanAnimation();
+        } else {
+            console.error('stopBodyScanAnimation function not defined in wellness_enhancements.js');
+        }
+    })();
+    """
+    return Script(js_code)
+
+
+@rt("/trigger_body_glow_script")
+def get_trigger_body_glow_script():
+    """
+    This route is triggered by the 'Full Body Glow' button.
+    It returns a JavaScript snippet that calls the toggleBodyGlowEffect function
+    defined in wellness_enhancements.js.
+    """
+    js_code = """
+    (() => {
+        if (typeof toggleBodyGlowEffect === 'function') {
+            toggleBodyGlowEffect();
+        } else {
+            console.error('toggleBodyGlowEffect function not defined in wellness_enhancements.js');
+            // Optionally, you could alert the user or send a toast message from here if the function is missing
+            // For example: document.getElementById('toastContainer').dispatchEvent(new CustomEvent('showtoast', { detail: { message: 'Error: Glow effect unavailable.', type: 'error' }}));
+        }
+    })();
+    """
+    return Script(js_code)
+
+@rt("/js_show_narrow_scan_modal")
+def js_show_narrow_scan_modal_script():
+    """
+    Returns a JavaScript snippet to open the narrowScanModal.
+    """
+    # Ensure the modal ID matches the one in your FT definitions
+    js_code = """
+    (() => {
+        const modal = document.getElementById('narrowScanModal');
+        if (modal && typeof modal.showModal === 'function') {
+            // Clear previous input if any
+            const narrowInput = document.getElementById('narrowScanInput');
+            if (narrowInput) {
+                narrowInput.value = '';
+            }
+            modal.showModal();
+        } else {
+            console.error('Narrow scan modal or its showModal function not found.');
+            // Fallback or error toast could be triggered here
+            // Example: showToast('Error: Cannot open scan options.', 'error');
+        }
+    })();
+    """
+    return Script(js_code)
+
+
 
 
 # Landing Page
