@@ -279,9 +279,34 @@ if (typeof showToast === 'undefined') {
     }
 }
 
+
+// --- CHAT AUTO-SCROLLING LOGIC ---
+function scrollChatToEnd() {
+    const messagesEndRef = document.getElementById('messagesEndRef');
+    if (messagesEndRef) {
+        messagesEndRef.scrollIntoView({ behavior: 'smooth' });
+    }
+}
+
+document.body.addEventListener('htmx:afterSwap', function(event) {
+    const messagesArea = document.getElementById('messagesArea');
+
+    if (messagesArea) {
+        if (event.detail.target === messagesArea) {
+            setTimeout(scrollChatToEnd, 50); 
+        }
+        else if (event.detail.elt && messagesArea.contains(event.detail.elt)) {
+             setTimeout(scrollChatToEnd, 50);
+        }
+    }
+});
+
+
 document.addEventListener('DOMContentLoaded', () => {
     initializeScanAnimationElements(); 
-    startBodyScanAnimation(); // ADD THIS LINE TO START SCAN ON PAGE LOAD
+    startBodyScanAnimation(); 
 });
+
+
 
 console.log("wellness_enhancements.js loaded (v2.7 - auto start scan).");

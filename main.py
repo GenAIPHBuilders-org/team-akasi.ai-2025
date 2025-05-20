@@ -10,8 +10,11 @@ from pathlib import Path
 import json
 from services.sb_user_services import fetch_user_profile # Assuming this path is correct relative to your project structure
 from fasthtml.core import RedirectResponse
-
-
+import asyncio
+import re
+import asyncio
+import time
+import urllib.parse
 
 
 # --- Configuration ---
@@ -185,10 +188,188 @@ def create_main_anatomy_svg():
         cls="object-contain w-full h-full p-2", 
         style="position: relative; z-index: 2; background-color: #f8fafc; border: 1px solid #e2e8f0;" 
     )
-
-
-
 main_anatomy_svg_ft = create_main_anatomy_svg()
+
+
+pre_configured_conversation_history = [
+    'Human Message: "I’ve had a sore throat for 3 days."',
+    'AI Message: "Do you also have a fever or cough?"',
+    'Human Message: "Yes, I have a mild fever but no cough."',
+    'AI Message: "Are you experiencing any difficulty swallowing or swollen glands?"',
+    'Human Message: "Swallowing is painful, and my neck feels tender."',
+    'AI Message: "It may be a throat infection; I recommend seeing a doctor for a throat swab."'
+]
+
+# Body scanner action commands list
+body_scanner_action_commands_list = [
+    "START_SCAN", "STOP_SCAN", "Head", "Neck", "Thorax", "Lungs", "Heart",
+    "Abdominal and Pelvic Region", "Left Shoulder", "Right Shoulder",
+    "Left Arm", "Right Arm", "Left Hand", "Right Hand", "Left Leg",
+    "Right Leg", "Left Foot", "Right Foot", "FULL_BODY_GLOW"
+]
+
+
+
+async def llm_agent_1(user_message: str):
+    """
+    Simulates an LLM agent processing the user message.
+    Returns a structured response after a delay.
+    """
+    print(f"llm_agent_1 received: {user_message}")
+    await asyncio.sleep(2) # Simulate 2-second delay
+
+    # Determine body_scanner_animation_action_comand
+    found_command = "idle" # Default command
+    for command in body_scanner_action_commands_list:
+        # Simple case-insensitive keyword matching
+        if re.search(r'\b' + re.escape(command) + r'\b', user_message, re.IGNORECASE):
+            found_command = command
+            break
+    
+    # For START_SCAN and STOP_SCAN, ensure they are specific enough if they are keywords in body_scanner_action_commands_list
+    if "start scan" in user_message.lower():
+        found_command = "START_SCAN"
+    elif "stop scan" in user_message.lower():
+        found_command = "STOP_SCAN"
+    elif "full body glow" in user_message.lower() or "glow" in user_message.lower(): # Added "glow" for flexibility
+        found_command = "FULL_BODY_GLOW"
+
+
+    response_data = {
+        "ai_response": "Hello World", # Static AI response for now
+        "body_scanner_animation_action_comand": found_command,
+        "trigger_wellness_journal_data_listener": "START",
+        "output_conversation_history": pre_configured_conversation_history # Using the predefined list
+    }
+    print(f"llm_agent_1 output: {response_data}")
+    return response_data
+
+def unified_ui_controller_for_chat_window_and_body_scanner(llm_data: dict, user_message_text: str, bubble_id: str = None):
+    """
+    Processes LLM data to generate UI updates (primarily AI chat bubble).
+    Prints other data for now.
+    """
+    ai_response_text = llm_data.get("ai_response", "Sorry, I encountered an issue.")
+    current_id = bubble_id if bubble_id else f"ai-bubble-{time.time_ns()}"
+
+    # Generate AI chat bubble FT component
+    ai_chat_bubble = Div(
+        Div(
+            Div(
+                Div(
+                    Span("smart_toy", cls="material-icons emoji-icon"),
+                    cls="bg-transparent text-neutral-content rounded-full w-8 h-8 text-sm flex items-center justify-center"
+                ),
+                cls="avatar placeholder p-0 w-8 h-8 rounded-full mr-2 bg-base-300"
+            ),
+            Div( 
+                P(ai_response_text, cls="text-sm leading-relaxed chat-message-text"),
+                cls="chat-bubble chat-bubble-neutral bg-base-300 text-base-content rounded-bl-none shadow-md"
+            ),
+            cls="flex items-end max-w-xs sm:max-w-md md:max-w-lg"
+        ),
+        cls="flex justify-start chat-message-container animate-slideUp", 
+        id=current_id 
+
+    )
+
+
+    print(f"Unified UI Controller - Body Scanner Command: {llm_data.get('body_scanner_animation_action_comand')}")
+    print(f"Unified UI Controller - Wellness Journal Trigger: {llm_data.get('trigger_wellness_journal_data_listener')}")
+    print(f"Unified UI Controller - Conversation History: {llm_data.get('output_conversation_history')}")
+
+    return ai_chat_bubble
+
+
+@rt("/send_chat_message")
+async def handle_send_chat_message(req):
+    form_data = await req.form()
+    user_message_text = form_data.get("chatInput", "").strip()
+
+    if not user_message_text:
+        return Textarea(id="chatInput", placeholder="Describe your symptoms here...", cls="textarea textarea-bordered flex-grow resize-none scrollbar-thin", rows="1", style="min-height: 44px; max-height: 120px;", hx_swap_oob="true")
+
+
+    user_chat_bubble = Div(
+        Div(
+            Div(
+                Div(
+                    Span("person", cls="material-icons emoji-icon"),
+                    cls="bg-transparent text-neutral-content rounded-full w-8 h-8 text-sm flex items-center justify-center"
+                ),
+                cls="avatar placeholder p-0 w-8 h-8 rounded-full ml-2 user-message-gradient"
+            ),
+            Div(
+                P(user_message_text, cls="text-sm leading-relaxed chat-message-text"),
+                cls="chat-bubble chat-bubble-primary user-message-gradient rounded-br-none shadow-md"
+            ),
+            cls="flex items-end max-w-xs sm:max-w-md md:max-w-lg flex-row-reverse"
+        ),
+        cls="flex justify-end chat-message-container animate-slideUp"
+    )
+
+
+    ai_message_id = f"ai-message-{time.time_ns()}"
+    user_message_text_encoded = urllib.parse.quote(user_message_text)
+
+    typing_indicator_bubble = Div(
+        Div( 
+            Div(
+                Div(
+                    Span("smart_toy", cls="material-icons emoji-icon"),
+                    cls="bg-transparent text-neutral-content rounded-full w-8 h-8 text-sm flex items-center justify-center"
+                ),
+                cls="avatar placeholder p-0 w-8 h-8 rounded-full mr-2 bg-base-300"
+            ),
+            Div(
+                P("Akasi is typing...", cls="text-sm italic text-base-content/70 chat-message-text"),
+               
+                cls="chat-bubble chat-bubble-neutral bg-base-300 text-base-content rounded-bl-none shadow-md"
+            ),
+            cls="flex items-end max-w-xs sm:max-w-md md:max-w-lg"
+        ),
+        id=ai_message_id, 
+        cls="flex justify-start chat-message-container animate-slideUp", 
+        hx_get=f"/get_ai_actual_response?user_message={user_message_text_encoded}&target_id={ai_message_id}",
+        hx_trigger="load delay:50ms", 
+        hx_swap="outerHTML"    
+    )
+
+
+    cleared_chat_input = Textarea(id="chatInput", name="chatInput", placeholder="Describe your symptoms here...", cls="textarea textarea-bordered flex-grow resize-none scrollbar-thin", rows="1", style="min-height: 44px; max-height: 120px;", hx_swap_oob="true")
+  
+    return user_chat_bubble, typing_indicator_bubble, cleared_chat_input
+
+
+# --- NEW ROUTE to fetch and return the actual AI response ---
+@rt("/get_ai_actual_response")
+async def get_ai_actual_response(req):
+    user_message_text_encoded = req.query_params.get("user_message", "")
+    target_id = req.query_params.get("target_id", "")
+
+
+    user_message_text = urllib.parse.unquote(user_message_text_encoded)
+
+    if not user_message_text or not target_id:
+        return Div(
+            P("Error: Could not load AI response. Missing parameters.", cls="text-red-500 text-sm"),
+            id=target_id, 
+            cls="chat-bubble chat-bubble-error" 
+        )
+
+    llm_output = await llm_agent_1(user_message_text)
+
+    ai_chat_bubble_component = unified_ui_controller_for_chat_window_and_body_scanner(
+        llm_data=llm_output,
+        user_message_text=user_message_text,
+        bubble_id=target_id 
+    )
+    
+
+    return ai_chat_bubble_component
+
+
+
 @rt('/onboarding/wellness-journal')
 def get(auth):
     if auth is None:
@@ -398,6 +579,7 @@ def get(auth):
             ),
             cls="flex justify-end"
         ),
+        Div(id="messagesEndRef", cls="h-0"), 
         id="messagesArea",
         cls="flex-grow p-3 sm:p-4 space-y-3 overflow-y-auto bg-base-200 scrollbar-thin"
     )
@@ -405,33 +587,51 @@ def get(auth):
     chat_input_area = Div(
         Div(id="stagedAttachmentsContainer", cls="mb-2 p-2 border border-base-300 rounded-lg bg-base-200 max-h-32 overflow-y-auto scrollbar-thin space-y-2 hidden"),
         Div(
+
             Div(
                 Button(
                     Span("add", cls="material-icons emoji-icon text-2xl"),
                     id="attachmentButton", tabindex="0", role="button", title="Attach files",
                     cls="btn btn-ghost btn-circle text-primary"
                 ),
-                Div(
-                    Button(
-                        Span("image", cls="material-icons emoji-icon"), " Attach Image(s)",
-                        id="attachImageButton", cls="btn btn-sm btn-ghost justify-start gap-2"
-                    ),
-                    Button(
-                        Span("article", cls="material-icons emoji-icon"), " Attach Document(s)",
-                        id="attachDocumentButton", cls="btn btn-sm btn-ghost justify-start gap-2"
-                    ),
+                Div( 
+                    Button(Span("image", cls="material-icons emoji-icon"), " Attach Image(s)", id="attachImageButton", cls="btn btn-sm btn-ghost justify-start gap-2"),
+                    Button(Span("article", cls="material-icons emoji-icon"), " Attach Document(s)", id="attachDocumentButton", cls="btn btn-sm btn-ghost justify-start gap-2"),
                     id="attachmentOptionsContent", tabindex="0",
                     cls="dropdown-content z-[20] menu p-2 shadow bg-base-100 rounded-box w-56 mb-2"
                 ),
                 id="attachmentOptionsDropdownContainer", cls="dropdown dropdown-top"
             ),
-            Input(type="file", multiple=True, id="fileInput", cls="hidden"),
-            Textarea(id="chatInput", placeholder="Describe your symptoms here...", cls="textarea textarea-bordered flex-grow resize-none scrollbar-thin", rows="1", style="min-height: 44px; max-height: 120px;"),
-            Button(
-                Span("send", cls="material-icons emoji-icon text-xl"),
-                id="sendButton", cls="btn btn-primary btn-circle"
+
+
+            Form(
+                # Hidden file input - now part of the form
+                Input(type="file", multiple=True, id="fileInput", name="files", cls="hidden"), # Added name="files"
+
+                # Chat Textarea
+                Textarea(id="chatInput", name="chatInput", # Crucial: 'name' attribute for form submission
+                        placeholder="Describe your symptoms here...",
+                        cls="textarea textarea-bordered flex-grow resize-none scrollbar-thin",
+                        rows="1", style="min-height: 44px; max-height: 120px;"),
+
+                # Send Button
+                Button(
+                    Span("send", cls="material-icons emoji-icon text-xl"),
+                    id="sendButton",
+                    type="submit",   
+                    cls="btn btn-primary btn-circle"
+                ),
+
+                # HTMX attributes for the Form:
+                hx_post="/send_chat_message",
+                hx_target="#messagesArea", # Target for appending new user/AI messages
+                hx_swap="beforeend",     # Append new messages to the target
+                hx_encoding="multipart/form-data", # Use this if you plan to handle file uploads with this form.
+                                                # The backend /send_chat_message currently only handles text.
+                # Styling for the Form itself to maintain layout
+                cls="flex items-end space-x-2 sm:space-x-3 flex-grow"
             ),
-            cls="flex items-end space-x-2 sm:space-x-3"
+            cls="flex items-end space-x-2 sm:space-x-3" # Original class for this parent Div
         ),
         cls="bg-base-100 p-3 sm:p-4 shadow-inner border-t border-base-300"
     )
@@ -440,7 +640,6 @@ def get(auth):
         Div(
             chatbox_header,
             messages_area,
-            Div(id="messagesEndRef", cls="h-0"),
             chat_input_area,
             id="chatboxRoot",
             cls="flex flex-col h-full bg-base-100 text-base-content rounded-lg shadow-xl overflow-hidden border border-base-300"
