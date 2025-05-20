@@ -216,29 +216,32 @@ async def llm_agent_1(user_message: str):
     Returns a structured response after a delay.
     """
     print(f"llm_agent_1 received: {user_message}")
-    await asyncio.sleep(2) # Simulate 2-second delay
+    await asyncio.sleep(1) # Simulate 1-second delay
 
-    # Determine body_scanner_animation_action_comand
     found_command = "idle" # Default command
-    for command in body_scanner_action_commands_list:
-        # Simple case-insensitive keyword matching
-        if re.search(r'\b' + re.escape(command) + r'\b', user_message, re.IGNORECASE):
-            found_command = command
-            break
-    
-    # For START_SCAN and STOP_SCAN, ensure they are specific enough if they are keywords in body_scanner_action_commands_list
-    if "start scan" in user_message.lower():
+    normalized_user_message = user_message.lower()
+
+    # More specific commands first
+    if "start scan" in normalized_user_message:
         found_command = "START_SCAN"
-    elif "stop scan" in user_message.lower():
+    elif "stop scan" in normalized_user_message:
         found_command = "STOP_SCAN"
-    elif "full body glow" in user_message.lower() or "glow" in user_message.lower(): # Added "glow" for flexibility
+    elif "full body glow" in normalized_user_message or "glow" in normalized_user_message:
         found_command = "FULL_BODY_GLOW"
-
-
+    else:
+        # Check for body part names
+        for command_keyword in body_scanner_action_commands_list:
+            # Ensure keywords like "Heart" or "Lungs" are specifically matched if they are also general animation commands
+            if command_keyword not in ["START_SCAN", "STOP_SCAN", "FULL_BODY_GLOW"]:
+                 # Use word boundaries for more precise matching of body parts
+                if re.search(r'\b' + re.escape(command_keyword.lower()) + r'\b', normalized_user_message):
+                    found_command = command_keyword # Keep original casing for JS
+                    break
+    
     response_data = {
-        "ai_response": "Hello World", # Static AI response for now
+        "ai_response": f"Simulated AI response to: '{user_message}'. Action: {found_command}", # Dynamic AI response
         "body_scanner_animation_action_comand": found_command,
-        "trigger_wellness_journal_data_listener": "START",
+        "trigger_wellness_journal_data_listener": "START", # This can be made dynamic too
         "output_conversation_history": pre_configured_conversation_history # Using the predefined list
     }
     print(f"llm_agent_1 output: {response_data}")
@@ -341,32 +344,48 @@ async def handle_send_chat_message(req):
     return user_chat_bubble, typing_indicator_bubble, cleared_chat_input
 
 
-# --- NEW ROUTE to fetch and return the actual AI response ---
+# --- MODIFIED ROUTE to fetch AI response AND trigger animations ---
 @rt("/get_ai_actual_response")
 async def get_ai_actual_response(req):
     user_message_text_encoded = req.query_params.get("user_message", "")
-    target_id = req.query_params.get("target_id", "")
-
+    target_id = req.query_params.get("target_id", "") # This is the ID of the typing indicator
 
     user_message_text = urllib.parse.unquote(user_message_text_encoded)
 
     if not user_message_text or not target_id:
         return Div(
             P("Error: Could not load AI response. Missing parameters.", cls="text-red-500 text-sm"),
-            id=target_id, 
-            cls="chat-bubble chat-bubble-error" 
+            id=target_id, # Ensure the error replaces the typing indicator
+            cls="chat-bubble chat-bubble-error"
         )
 
     llm_output = await llm_agent_1(user_message_text)
 
     ai_chat_bubble_component = unified_ui_controller_for_chat_window_and_body_scanner(
         llm_data=llm_output,
-        user_message_text=user_message_text,
-        bubble_id=target_id 
+        user_message_text=user_message_text, # Not strictly needed by controller anymore but good for context
+        bubble_id=target_id # The new AI bubble will replace the typing indicator
     )
-    
 
-    return ai_chat_bubble_component
+    animation_script_component = None
+    scanner_command = llm_output.get('body_scanner_animation_action_comand', "idle")
+
+    if scanner_command and scanner_command.lower() != "idle":
+        # Escape the command string to be safely used in a JavaScript string literal
+        # For commands from a predefined list, direct insertion is okay, but html.escape is safer for arbitrary strings.
+        # Since scanner_command comes from our predefined list, direct use is fine.
+        js_command_call = f"executeBodyScannerCommand('{scanner_command}');"
+        animation_script_component = Script(f"(() => {{ try {{ {js_command_call} }} catch (e) {{ console.error('Error executing scanner command:', e); }} }})();")
+
+    if animation_script_component:
+        # Return the AI bubble and the script to run.
+        # HTMX will replace the typing indicator with these two elements.
+        # The script tag will execute when inserted into the DOM.
+        return ai_chat_bubble_component, animation_script_component
+    else:
+        # Only return the AI bubble if no animation command
+        return ai_chat_bubble_component
+
 
 
 
