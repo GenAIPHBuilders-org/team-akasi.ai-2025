@@ -15,14 +15,16 @@ import re
 import asyncio
 import time
 import urllib.parse
+from starlette.datastructures import UploadFile
+import base64
 
 
 # --- Configuration ---
 BASE_DIR = Path(__file__).resolve().parent
 load_dotenv(os.path.join(BASE_DIR, '.env'))
 
-supabase_url = os.getenv("SUPABASE_URL")
-supabase_anon_key = os.getenv("SUPABASE_ANON_KEY")
+supabase_url = os.getenv("SUPABASE_URL_NEW")
+supabase_anon_key = os.getenv("SUPABASE_ANON_KEY_NEW")
 supabase: Client = create_client(supabase_url, supabase_anon_key)
 
 def use_auth_context(access_token, refresh_token=None):
@@ -210,13 +212,76 @@ body_scanner_action_commands_list = [
 
 
 
-async def llm_agent_1(user_message: str):
+
+async def process_files_to_base64_list(files: list[UploadFile]) -> list[dict]:
+    # (This function remains the same as provided in the previous correct answer)
+    # It takes a list of UploadFile objects, reads them, converts to Base64,
+    # and returns a list of dicts with filename, content_type, size, base64.
+    # Ensure it handles potential errors and closes files.
+    processed_attachments = []
+    if not files:
+        return processed_attachments
+    
+    for file_upload in files:
+        if file_upload and file_upload.filename and isinstance(file_upload, UploadFile):
+            try:
+                contents = await file_upload.read()
+                encoded_string = base64.b64encode(contents).decode('utf-8')
+                processed_attachments.append({
+                    "filename": file_upload.filename,
+                    "content_type": file_upload.content_type,
+                    "size": file_upload.size,
+                    "base64": encoded_string
+                })
+                await file_upload.close()
+            except Exception as e:
+                print(f"Error processing file {getattr(file_upload, 'filename', 'unknown')}: {e}")
+                processed_attachments.append({
+                    "filename": getattr(file_upload, 'filename', 'unknown_error_file'),
+                    "error": str(e)
+                })
+        else:
+            print(f"Skipping invalid file object: {file_upload}") # Log if not an UploadFile
+    return processed_attachments
+
+
+
+
+
+
+
+
+
+
+async def llm_agent_1(user_message: str, attachments_data: list[dict] = None):
     """
     Simulates an LLM agent processing the user message.
     Returns a structured response after a delay.
     """
-    print(f"llm_agent_1 received: {user_message}")
-    await asyncio.sleep(5) # Simulate 1-second delay
+
+    print(f"\n--- Entered llm_agent_1 ---")
+    print(f"llm_agent_1 received user_message: {user_message}")
+
+    # --- Print attachment details if present ---
+    if attachments_data:
+        print(f"llm_agent_1 received {len(attachments_data)} attachments:")
+        for idx, att_data in enumerate(attachments_data):
+            print(f"  Attachment #{idx + 1}:")
+            if "error" in att_data:
+                print(f"    Filename: {att_data.get('filename', 'N/A')}")
+                print(f"    Error during previous processing: {att_data['error']}")
+            else:
+                print(f"    Filename: {att_data.get('filename', 'N/A')}")
+                print(f"    Content-Type: {att_data.get('content_type', 'N/A')}")
+                print(f"    Size: {att_data.get('size', 0)} bytes (approx. from Base64 length)")
+                base64_snippet = att_data.get('base64', '')[:80]  # Snippet
+                print(f"    Base64 Snippet (first 80 chars): {base64_snippet}...")
+    else:
+        print("llm_agent_1 received no attachments.")
+    # --- End of attachment printing ---
+
+
+    await asyncio.sleep(2) # Simulate 1-second delay
 
     found_command = "idle" # Default command
     normalized_user_message = user_message.lower()
@@ -246,6 +311,8 @@ async def llm_agent_1(user_message: str):
     }
     print(f"llm_agent_1 output: {response_data}")
     return response_data
+
+
 
 def unified_ui_controller_for_chat_window_and_body_scanner(llm_data: dict, user_message_text: str, bubble_id: str = None):
     """
@@ -284,18 +351,85 @@ def unified_ui_controller_for_chat_window_and_body_scanner(llm_data: dict, user_
     return ai_chat_bubble
 
 
+
+
+
 @rt("/send_chat_message")
-async def handle_send_chat_message(req):
+async def handle_send_chat_message(req, sess):
     form_data = await req.form()
     user_message_text = form_data.get("chatInput", "").strip()
+    uploaded_file_objects: list[UploadFile] = form_data.getlist("files")
 
-    if not user_message_text:
-        return Textarea(id="chatInput", placeholder="Describe your symptoms here...", cls="textarea textarea-bordered flex-grow resize-none scrollbar-thin", rows="1", style="min-height: 44px; max-height: 120px;", hx_swap_oob="true")
+    attachment_uuids_for_next_step = []
+    processed_attachments_for_preview = []
+    
+    # This needs to be more effecient because I have to wait for the file to be converted to base64 then inserted on saupabase. I think its because of the uuid that I need to wait
+    if uploaded_file_objects:
+        print(f"Received {len(uploaded_file_objects)} file objects in /send_chat_message.")
+        base64_attachments_list = await process_files_to_base64_list(uploaded_file_objects)
+        
+        if base64_attachments_list:
+            processed_attachments_for_preview = base64_attachments_list 
+            for att_data in base64_attachments_list:
+                if "error" not in att_data and "base64" in att_data:
+                    insert_payload = {
+                        "base64_string": att_data["base64"],
+                        "file_type": att_data.get("content_type"),
+                        # Optional: "filename": att_data.get("filename") # if you added filename to your table
+                    }
+                    try:
+                        response = supabase.table("akasi_base64_image_strings").insert(insert_payload).execute()
+                        if response.data and len(response.data) > 0:
+                            new_uuid = response.data[0]['id']
+                            attachment_uuids_for_next_step.append(str(new_uuid))
+                            print(f"Inserted attachment {att_data.get('filename', 'N/A')} to Supabase with UUID: {new_uuid}")
+                        else:
+                            print(f"Error inserting {att_data.get('filename', 'N/A')} to Supabase or no data returned. Response: {response}")
+                    except Exception as e:
+                        print(f"Supabase insert exception for {att_data.get('filename', 'N/A')}: {e}")
+                else:
+                    print(f"Skipping insert for attachment due to processing error or missing base64: {att_data.get('filename', 'N/A')}")
+            print(f"Collected {len(attachment_uuids_for_next_step)} UUIDs from Supabase inserts.")
+        else:
+            print("No valid attachments processed to store in Supabase.")
+    
+    
+    if not user_message_text and not processed_attachments_for_preview:
+        # If message and attachments are empty, just return the OOB cleared input
+        return Textarea(id="chatInput", name="chatInput", placeholder="Describe your symptoms here...", cls="textarea textarea-bordered flex-grow resize-none scrollbar-thin", rows="1", style="min-height: 44px; max-height: 120px;", hx_swap_oob="true")
+
+
+    # --- Construct User Chat Bubble with Attachment Previews (using processed_attachments_for_preview) ---
+    user_chat_bubble_content_elements = []
+    if user_message_text:
+        user_chat_bubble_content_elements.append(P(user_message_text, cls="text-sm leading-relaxed chat-message-text"))
+
+    if processed_attachments_for_preview:
+        attachment_previews_container_items = []
+        for att_info in processed_attachments_for_preview: # Use the data we have on hand for preview
+            if "error" not in att_info:
+                icon_name = "image" if att_info.get("content_type", "").startswith("image/") else "article"
+                file_size_kb = (att_info.get('size', 0) / 1024)
+                size_text = f"({file_size_kb:.1f} KB)" if file_size_kb > 0 else ""
+                
+                preview_item = Div(
+                    Span(icon_name, cls="material-symbols-outlined emoji-icon text-lg mr-1.5 text-primary/80 flex-shrink-0"),
+                    Span(f"{att_info.get('filename', 'N/A')} {size_text}".strip(), cls="text-xs text-base-content/80 truncate"),
+                    cls="flex items-center p-1.5 bg-primary/10 rounded"
+                )
+                attachment_previews_container_items.append(preview_item)
+        
+        if attachment_previews_container_items:
+            user_chat_bubble_content_elements.append(
+                Div(*attachment_previews_container_items, cls="mt-2 pt-2 space-y-1.5 border-t border-primary/30")
+            )
+    
+
 
 
     user_chat_bubble = Div(
         Div(
-            Div(
+            Div( 
                 Div(
                     Span("person", cls="material-icons emoji-icon"),
                     cls="bg-transparent text-neutral-content rounded-full w-8 h-8 text-sm flex items-center justify-center"
@@ -303,7 +437,7 @@ async def handle_send_chat_message(req):
                 cls="avatar placeholder p-0 w-8 h-8 rounded-full ml-2 user-message-gradient"
             ),
             Div(
-                P(user_message_text, cls="text-sm leading-relaxed chat-message-text"),
+                *user_chat_bubble_content_elements,
                 cls="chat-bubble chat-bubble-primary user-message-gradient rounded-br-none shadow-md"
             ),
             cls="flex items-end max-w-xs sm:max-w-md md:max-w-lg flex-row-reverse"
@@ -311,36 +445,38 @@ async def handle_send_chat_message(req):
         cls="flex justify-end chat-message-container animate-slideUp"
     )
 
-
     user_message_text_encoded = urllib.parse.quote(user_message_text)
+    
+    # Construct attachment_uuids_param
+    attachment_uuids_str = ",".join(attachment_uuids_for_next_step)
+    attachment_uuids_param = f"&attachment_uuids={attachment_uuids_str}" if attachment_uuids_str else ""
 
+    typing_loader_trigger_id = f"typing-loader-placeholder-{time.time_ns()}"
     typing_loader_trigger = Div(
-        id=f"typing-loader-placeholder-{time.time_ns()}", # Unique ID for this temporary placeholder
-        hx_get=f"/load_typing_indicator?user_message={user_message_text_encoded}",
-        hx_trigger="load delay:700ms",  # <<< This is the 0.5s delay for the typing indicator to appear
-        hx_swap="outerHTML"
-        # This div is initially empty and will be replaced entirely.
+        id=typing_loader_trigger_id,
+        hx_get=f"/load_typing_indicator?user_message={user_message_text_encoded}{attachment_uuids_param}",
+        hx_trigger="load delay:500ms", hx_swap="outerHTML"
     )
 
-
+    # This OOB swap clears the textarea.
     cleared_chat_input = Textarea(id="chatInput", name="chatInput", placeholder="Describe your symptoms here...", cls="textarea textarea-bordered flex-grow resize-none scrollbar-thin", rows="1", style="min-height: 44px; max-height: 120px;", hx_swap_oob="true")
-  
+ 
     return user_chat_bubble, typing_loader_trigger, cleared_chat_input
 
 
 @rt("/load_typing_indicator")
 async def load_typing_indicator_handler(req):
     user_message_text_encoded = req.query_params.get("user_message", "")
-
+    attachment_uuids = req.query_params.get("attachment_uuids", "") # Get the UUIDs string
     ai_bubble_target_id = f"ai-bubble-{time.time_ns()}"
+
+    attachment_uuids_param = f"&attachment_uuids={attachment_uuids}" if attachment_uuids else ""
+
 
     typing_indicator_bubble = Div(
         Div(
             Div(
-                Div(
-                    Span("smart_toy", cls="material-icons emoji-icon"),
-                    cls="bg-transparent text-neutral-content rounded-full w-8 h-8 text-sm flex items-center justify-center"
-                ),
+                Div(Span("smart_toy", cls="material-icons emoji-icon"), cls="bg-transparent text-neutral-content rounded-full w-8 h-8 text-sm flex items-center justify-center"),
                 cls="avatar placeholder p-0 w-8 h-8 rounded-full mr-2 bg-base-300"
             ),
             Div(
@@ -349,60 +485,83 @@ async def load_typing_indicator_handler(req):
             ),
             cls="flex items-end max-w-xs sm:max-w-md md:max-w-lg"
         ),
-        
-        id=ai_bubble_target_id, 
-        cls="flex justify-start chat-message-container animate-slideUp", 
-        hx_get=f"/get_ai_actual_response?user_message={user_message_text_encoded}&target_id={ai_bubble_target_id}",
-        hx_trigger="load delay:0ms", # This delay is for fetching the *actual* AI response
+        id=ai_bubble_target_id,
+        cls="flex justify-start chat-message-container animate-slideUp",
+        hx_get=f"/get_ai_actual_response?user_message={user_message_text_encoded}&target_id={ai_bubble_target_id}{attachment_uuids_param}",
+        hx_trigger="load delay:50ms", 
         hx_swap="outerHTML"
     )
     return typing_indicator_bubble
 
 
 
-
-
-# --- MODIFIED ROUTE to fetch AI response AND trigger animations ---
 @rt("/get_ai_actual_response")
-async def get_ai_actual_response(req):
+async def get_ai_actual_response(req, sess):
     user_message_text_encoded = req.query_params.get("user_message", "")
-    target_id = req.query_params.get("target_id", "") # This is the ID of the typing indicator
+    target_id = req.query_params.get("target_id", "") 
+    attachment_uuids_str = req.query_params.get("attachment_uuids", "") # Get the UUIDs string
 
     user_message_text = urllib.parse.unquote(user_message_text_encoded)
+    
+    retrieved_attachments_from_supabase = [] # Renamed for clarity
+    list_of_uuids_to_delete = [] # Keep track of UUIDs to delete later
 
-    if not user_message_text or not target_id:
+    if attachment_uuids_str:
+        list_of_uuids = [uid.strip() for uid in attachment_uuids_str.split(',') if uid.strip()]
+        list_of_uuids_to_delete = list_of_uuids # Store for deletion
+        if list_of_uuids:
+            print(f"Attempting to retrieve attachments from Supabase for UUIDs: {list_of_uuids}")
+            try:
+                response = supabase.table("akasi_base64_image_strings").select("id, base64_string, file_type").in_("id", list_of_uuids).execute()
+                
+                if response.data:
+                    print(f"Retrieved {len(response.data)} attachments from Supabase.")
+                    for row in response.data:
+
+                        retrieved_attachments_from_supabase.append({
+
+                            "filename": f"attachment_{row['id']}.{row['file_type'].split('/')[-1] if row.get('file_type') else 'bin'}",
+                            "content_type": row.get('file_type'),
+                            "base64": row.get('base64_string'),
+                            "size": len(row.get('base64_string', ''))
+                        })
+                else:
+                    print(f"No data returned from Supabase for UUIDs: {list_of_uuids}. Response: {response}")
+            except Exception as e:
+                print(f"Supabase select exception for UUIDs {list_of_uuids}: {e}")
+        else:
+            print("No valid UUIDs found in attachment_uuids_str.")
+            
+
+
+    # ** ADD LATER Optional but Recommended: Delete from Supabase after processing**
+
+    if not user_message_text and not retrieved_attachments_from_supabase:
         return Div(
-            P("Error: Could not load AI response. Missing parameters.", cls="text-red-500 text-sm"),
-            id=target_id, # Ensure the error replaces the typing indicator
-            cls="chat-bubble chat-bubble-error"
+            P("Error: No message or attachments to process.", cls="text-red-500 text-sm"),
+            id=target_id, cls="chat-bubble chat-bubble-error"
         )
 
-    llm_output = await llm_agent_1(user_message_text)
+
+    llm_output = await llm_agent_1(user_message_text, attachments_data=retrieved_attachments_from_supabase) 
 
     ai_chat_bubble_component = unified_ui_controller_for_chat_window_and_body_scanner(
         llm_data=llm_output,
-        user_message_text=user_message_text, # Not strictly needed by controller anymore but good for context
-        bubble_id=target_id # The new AI bubble will replace the typing indicator
+        user_message_text=user_message_text, 
+        bubble_id=target_id 
     )
 
     animation_script_component = None
     scanner_command = llm_output.get('body_scanner_animation_action_comand', "idle")
-
     if scanner_command and scanner_command.lower() != "idle":
-        # Escape the command string to be safely used in a JavaScript string literal
-        # For commands from a predefined list, direct insertion is okay, but html.escape is safer for arbitrary strings.
-        # Since scanner_command comes from our predefined list, direct use is fine.
         js_command_call = f"executeBodyScannerCommand('{scanner_command}');"
         animation_script_component = Script(f"(() => {{ try {{ {js_command_call} }} catch (e) {{ console.error('Error executing scanner command:', e); }} }})();")
 
     if animation_script_component:
-        # Return the AI bubble and the script to run.
-        # HTMX will replace the typing indicator with these two elements.
-        # The script tag will execute when inserted into the DOM.
         return ai_chat_bubble_component, animation_script_component
     else:
-        # Only return the AI bubble if no animation command
         return ai_chat_bubble_component
+
 
 
 
@@ -617,17 +776,22 @@ def get(auth):
         #     ),
         #     cls="flex justify-end"
         # ),
-        Div(id="messagesEndRef", cls="h-0"), 
+        # Div(id="messagesEndRef", cls="h-0"), 
         id="messagesArea",
         cls="flex-grow p-3 sm:p-4 space-y-3 overflow-y-auto bg-base-200 scrollbar-thin"
     )
 
     chat_input_area = Div(
-        Div(id="stagedAttachmentsContainer", cls="mb-2 p-2 border border-base-300 rounded-lg bg-base-200 max-h-32 overflow-y-auto scrollbar-thin space-y-2 hidden"),
+        Div(id="stagedAttachmentsContainer", 
+            cls="mb-2 p-2 border border-base-300 rounded-lg bg-base-200 max-h-32 overflow-y-auto scrollbar-thin space-y-2 hidden" 
+
+        ),
         Div(
 
             Div(
                 Button(
+
+                    
                     Span("add", cls="material-icons emoji-icon text-2xl"),
                     id="attachmentButton", tabindex="0", role="button", title="Attach files",
                     cls="btn btn-ghost btn-circle text-primary"
@@ -643,11 +807,11 @@ def get(auth):
 
 
             Form(
-                # Hidden file input - now part of the form
-                Input(type="file", multiple=True, id="fileInput", name="files", cls="hidden"), # Added name="files"
+
+                Input(type="file", multiple=True, id="fileInput", name="files_placeholder", cls="hidden"),
 
                 # Chat Textarea
-                Textarea(id="chatInput", name="chatInput", # Crucial: 'name' attribute for form submission
+                Textarea(id="chatInput", name="chatInput", 
                         placeholder="Describe your symptoms here...",
                         cls="textarea textarea-bordered flex-grow resize-none scrollbar-thin",
                         rows="1", style="min-height: 44px; max-height: 120px;"),
@@ -660,13 +824,12 @@ def get(auth):
                     cls="btn btn-primary btn-circle"
                 ),
 
+
                 # HTMX attributes for the Form:
+                id="chatForm", # Added an ID to the form for easier JS targeting
                 hx_post="/send_chat_message",
                 hx_target="#messagesArea", # Target for appending new user/AI messages
                 hx_swap="beforeend",     # Append new messages to the target
-                hx_encoding="multipart/form-data", # Use this if you plan to handle file uploads with this form.
-                                                # The backend /send_chat_message currently only handles text.
-                # Styling for the Form itself to maintain layout
                 cls="flex items-end space-x-2 sm:space-x-3 flex-grow"
             ),
             cls="flex items-end space-x-2 sm:space-x-3" # Original class for this parent Div
