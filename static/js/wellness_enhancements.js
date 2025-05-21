@@ -362,7 +362,7 @@ document.body.addEventListener('htmx:afterSwap', function(event) {
 
 document.addEventListener('DOMContentLoaded', () => {
     initializeScanAnimationElements();
-    // startBodyScanAnimation(); // Auto-start removed, will be command-driven
+    startBodyScanAnimation(); // Auto-start removed, will be command-driven
     updateScanAnimationVisuals(); // Ensure initial idle state is shown
 });
 

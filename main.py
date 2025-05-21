@@ -216,7 +216,7 @@ async def llm_agent_1(user_message: str):
     Returns a structured response after a delay.
     """
     print(f"llm_agent_1 received: {user_message}")
-    await asyncio.sleep(1) # Simulate 1-second delay
+    await asyncio.sleep(5) # Simulate 1-second delay
 
     found_command = "idle" # Default command
     normalized_user_message = user_message.lower()
@@ -312,11 +312,30 @@ async def handle_send_chat_message(req):
     )
 
 
-    ai_message_id = f"ai-message-{time.time_ns()}"
     user_message_text_encoded = urllib.parse.quote(user_message_text)
 
+    typing_loader_trigger = Div(
+        id=f"typing-loader-placeholder-{time.time_ns()}", # Unique ID for this temporary placeholder
+        hx_get=f"/load_typing_indicator?user_message={user_message_text_encoded}",
+        hx_trigger="load delay:700ms",  # <<< This is the 0.5s delay for the typing indicator to appear
+        hx_swap="outerHTML"
+        # This div is initially empty and will be replaced entirely.
+    )
+
+
+    cleared_chat_input = Textarea(id="chatInput", name="chatInput", placeholder="Describe your symptoms here...", cls="textarea textarea-bordered flex-grow resize-none scrollbar-thin", rows="1", style="min-height: 44px; max-height: 120px;", hx_swap_oob="true")
+  
+    return user_chat_bubble, typing_loader_trigger, cleared_chat_input
+
+
+@rt("/load_typing_indicator")
+async def load_typing_indicator_handler(req):
+    user_message_text_encoded = req.query_params.get("user_message", "")
+
+    ai_bubble_target_id = f"ai-bubble-{time.time_ns()}"
+
     typing_indicator_bubble = Div(
-        Div( 
+        Div(
             Div(
                 Div(
                     Span("smart_toy", cls="material-icons emoji-icon"),
@@ -326,22 +345,21 @@ async def handle_send_chat_message(req):
             ),
             Div(
                 P("Akasi is typing...", cls="text-sm italic text-base-content/70 chat-message-text"),
-               
                 cls="chat-bubble chat-bubble-neutral bg-base-300 text-base-content rounded-bl-none shadow-md"
             ),
             cls="flex items-end max-w-xs sm:max-w-md md:max-w-lg"
         ),
-        id=ai_message_id, 
+        
+        id=ai_bubble_target_id, 
         cls="flex justify-start chat-message-container animate-slideUp", 
-        hx_get=f"/get_ai_actual_response?user_message={user_message_text_encoded}&target_id={ai_message_id}",
-        hx_trigger="load delay:50ms", 
-        hx_swap="outerHTML"    
+        hx_get=f"/get_ai_actual_response?user_message={user_message_text_encoded}&target_id={ai_bubble_target_id}",
+        hx_trigger="load delay:0ms", # This delay is for fetching the *actual* AI response
+        hx_swap="outerHTML"
     )
+    return typing_indicator_bubble
 
 
-    cleared_chat_input = Textarea(id="chatInput", name="chatInput", placeholder="Describe your symptoms here...", cls="textarea textarea-bordered flex-grow resize-none scrollbar-thin", rows="1", style="min-height: 44px; max-height: 120px;", hx_swap_oob="true")
-  
-    return user_chat_bubble, typing_indicator_bubble, cleared_chat_input
+
 
 
 # --- MODIFIED ROUTE to fetch AI response AND trigger animations ---
@@ -443,161 +461,162 @@ def get(auth):
                     cls="avatar placeholder p-0 w-8 h-8 rounded-full mr-2 bg-base-300"
                 ),
                 Div(
-                    P("This is the first AI response.", cls="text-sm leading-relaxed chat-message-text"),
+                    P("Hey, Im Akasi,  lets build your wellness journal. A wellness journal is a compilation of everything related to your health, like your symptoms, conditions, and even uploaded photos or medical documents. Just start by telling me how you feel today.", cls="text-sm leading-relaxed chat-message-text"),
                     cls="chat-bubble chat-bubble-neutral bg-base-300 text-base-content rounded-bl-none shadow-md"
                 ),
                 cls="flex items-end max-w-xs sm:max-w-md md:max-w-lg"
             ),
-            cls="flex justify-start"
+            cls="flex justify-start chat-message-container animate-slideUp"
         ),
-        Div(
-            Div(
-                Div(
-                    Div(
-                        Span("person", cls="material-icons emoji-icon"),
-                        cls="bg-transparent text-neutral-content rounded-full w-8 h-8 text-sm flex items-center justify-center"
-                    ),
-                    cls="avatar placeholder p-0 w-8 h-8 rounded-full ml-2 user-message-gradient"
-                ),
-                Div(
-                    P("Hello Akasi!", cls="text-sm leading-relaxed chat-message-text"),
-                    cls="chat-bubble chat-bubble-primary user-message-gradient rounded-br-none shadow-md"
-                ),
-                cls="flex items-end max-w-xs sm:max-w-md md:max-w-lg flex-row-reverse"
-            ),
-            cls="flex justify-end"
-        ),
-        Div(
-            Div(
-                Div(
-                    Div(
-                        Span("smart_toy", cls="material-icons emoji-icon"),
-                        cls="bg-transparent text-neutral-content rounded-full w-8 h-8 text-sm flex items-center justify-center"
-                    ),
-                    cls="avatar placeholder p-0 w-8 h-8 rounded-full mr-2 bg-base-300"
-                ),
-                Div(
-                    P("Here's a response to your query about images.", cls="text-sm leading-relaxed chat-message-text"),
-                    cls="chat-bubble chat-bubble-neutral bg-base-300 text-base-content rounded-bl-none shadow-md"
-                ),
-                cls="flex items-end max-w-xs sm:max-w-md md:max-w-lg"
-            ),
-            cls="flex justify-start"
-        ),
-        Div(
-            Div(
-                Div(
-                    Div(
-                        Span("person", cls="material-icons emoji-icon"),
-                        cls="bg-transparent text-neutral-content rounded-full w-8 h-8 text-sm flex items-center justify-center"
-                    ),
-                    cls="avatar placeholder p-0 w-8 h-8 rounded-full ml-2 user-message-gradient"
-                ),
-                Div(
-                    P("Okay, check out these images.", cls="text-sm leading-relaxed chat-message-text"),
-                    Div(
-                        Div(
-                            Div(
-                                Img(src="https://placehold.co/100x75/A7F3D0/10B981?text=Img1", alt="Attached image 1", cls="rounded max-w-full h-auto max-h-32 object-contain", onerror="this.onerror=null; this.src='https://placehold.co/100x75/FEE2E2/DC2626?text=Error';"),
-                                P("image_sample_1.jpg (78 KB)", cls="text-xs text-base-content/70 mt-1 truncate")
-                            ),
-                            cls="p-1.5 rounded-md bg-base-100/50 border border-base-300/50"
-                        ),
-                        Div(
-                            Div(
-                                Img(src="https://placehold.co/100x75/A7F3D0/10B981?text=Img2", alt="Attached image 2", cls="rounded max-w-full h-auto max-h-32 object-contain", onerror="this.onerror=null; this.src='https://placehold.co/100x75/FEE2E2/DC2626?text=Error';"),
-                                P("photo_of_rash.png (120 KB)", cls="text-xs text-base-content/70 mt-1 truncate")
-                            ),
-                            cls="p-1.5 rounded-md bg-base-100/50 border border-base-300/50"
-                        ),
-                        Div(
-                            Div(
-                                Img(src="https://placehold.co/100x75/A7F3D0/10B981?text=Img3", alt="Attached image 3", cls="rounded max-w-full h-auto max-h-32 object-contain", onerror="this.onerror=null; this.src='https://placehold.co/100x75/FEE2E2/DC2626?text=Error';"),
-                                P("scan_result_view.jpeg (95 KB)", cls="text-xs text-base-content/70 mt-1 truncate")
-                            ),
-                            cls="p-1.5 rounded-md bg-base-100/50 border border-base-300/50"
-                        ),
-                        cls="mt-2 pt-2 space-y-2 border-t border-green-400/50"
-                    ),
-                    cls="chat-bubble chat-bubble-primary user-message-gradient rounded-b-xl shadow-md"
-                ),
-                cls="flex items-end max-w-xs sm:max-w-md md:max-w-lg flex-row-reverse"
-            ),
-            cls="flex justify-end"
-        ),
-        Div(
-            Div(
-                Div(
-                    Div(
-                        Span("smart_toy", cls="material-icons emoji-icon"),
-                        cls="bg-transparent text-neutral-content rounded-full w-8 h-8 text-sm flex items-center justify-center"
-                    ),
-                    cls="avatar placeholder p-0 w-8 h-8 rounded-full mr-2 bg-base-300"
-                ),
-                Div(
-                    P("Understood. And for the documents?", cls="text-sm leading-relaxed chat-message-text"),
-                    cls="chat-bubble chat-bubble-neutral bg-base-300 text-base-content rounded-bl-none shadow-md"
-                ),
-                cls="flex items-end max-w-xs sm:max-w-md md:max-w-lg"
-            ),
-            cls="flex justify-start"
-        ),
-        Div(
-            Div(
-                Div(
-                    Div(
-                        Span("person", cls="material-icons emoji-icon"),
-                        cls="bg-transparent text-neutral-content rounded-full w-8 h-8 text-sm flex items-center justify-center"
-                    ),
-                    cls="avatar placeholder p-0 w-8 h-8 rounded-full ml-2 user-message-gradient"
-                ),
-                Div(
-                    P("And here are some PDF documents.", cls="text-sm leading-relaxed chat-message-text"),
-                    Div(
-                        Div(
-                            Div(
-                                Span("attachment", cls="material-icons emoji-icon text-xl text-primary flex-shrink-0"),
-                                Div(
-                                    P("lab_results_q1.pdf", cls="text-xs font-medium text-base-content/90 truncate"),
-                                    P("256 KB", cls="text-xs text-base-content/70"),
-                                    cls="flex-grow overflow-hidden"
-                                ),
-                                cls="flex items-center gap-2"
-                            ),
-                            cls="p-1.5 rounded-md bg-base-100/50 border border-base-300/50"
-                        ),
-                        Div(
-                            Div(
-                                Span("attachment", cls="material-icons emoji-icon text-xl text-primary flex-shrink-0"),
-                                Div(
-                                    P("medical_history_summary.pdf", cls="text-xs font-medium text-base-content/90 truncate"),
-                                    P("512 KB", cls="text-xs text-base-content/70"),
-                                    cls="flex-grow overflow-hidden"
-                                ),
-                                cls="flex items-center gap-2"
-                            ),
-                            cls="p-1.5 rounded-md bg-base-100/50 border border-base-300/50"
-                        ),
-                        Div(
-                            Div(
-                                Span("attachment", cls="material-icons emoji-icon text-xl text-primary flex-shrink-0"),
-                                Div(
-                                    P("prescription_details.pdf", cls="text-xs font-medium text-base-content/90 truncate"),
-                                    P("128 KB", cls="text-xs text-base-content/70"),
-                                    cls="flex-grow overflow-hidden"
-                                ),
-                                cls="flex items-center gap-2"
-                            ),
-                            cls="p-1.5 rounded-md bg-base-100/50 border border-base-300/50"
-                        ),
-                        cls="mt-2 pt-2 space-y-2 border-t border-green-400/50"
-                    ),
-                    cls="chat-bubble chat-bubble-primary user-message-gradient rounded-b-xl shadow-md"
-                ),
-                cls="flex items-end max-w-xs sm:max-w-md md:max-w-lg flex-row-reverse"
-            ),
-            cls="flex justify-end"
-        ),
+        
+        # Div(
+        #     Div(
+        #         Div(
+        #             Div(
+        #                 Span("person", cls="material-icons emoji-icon"),
+        #                 cls="bg-transparent text-neutral-content rounded-full w-8 h-8 text-sm flex items-center justify-center"
+        #             ),
+        #             cls="avatar placeholder p-0 w-8 h-8 rounded-full ml-2 user-message-gradient"
+        #         ),
+        #         Div(
+        #             P("Hello Akasi!", cls="text-sm leading-relaxed chat-message-text"),
+        #             cls="chat-bubble chat-bubble-primary user-message-gradient rounded-br-none shadow-md"
+        #         ),
+        #         cls="flex items-end max-w-xs sm:max-w-md md:max-w-lg flex-row-reverse"
+        #     ),
+        #     cls="flex justify-end"
+        # ),
+        # Div(
+        #     Div(
+        #         Div(
+        #             Div(
+        #                 Span("smart_toy", cls="material-icons emoji-icon"),
+        #                 cls="bg-transparent text-neutral-content rounded-full w-8 h-8 text-sm flex items-center justify-center"
+        #             ),
+        #             cls="avatar placeholder p-0 w-8 h-8 rounded-full mr-2 bg-base-300"
+        #         ),
+        #         Div(
+        #             P("Here's a response to your query about images.", cls="text-sm leading-relaxed chat-message-text"),
+        #             cls="chat-bubble chat-bubble-neutral bg-base-300 text-base-content rounded-bl-none shadow-md"
+        #         ),
+        #         cls="flex items-end max-w-xs sm:max-w-md md:max-w-lg"
+        #     ),
+        #     cls="flex justify-start"
+        # ),
+        # Div(
+        #     Div(
+        #         Div(
+        #             Div(
+        #                 Span("person", cls="material-icons emoji-icon"),
+        #                 cls="bg-transparent text-neutral-content rounded-full w-8 h-8 text-sm flex items-center justify-center"
+        #             ),
+        #             cls="avatar placeholder p-0 w-8 h-8 rounded-full ml-2 user-message-gradient"
+        #         ),
+        #         Div(
+        #             P("Okay, check out these images.", cls="text-sm leading-relaxed chat-message-text"),
+        #             Div(
+        #                 Div(
+        #                     Div(
+        #                         Img(src="https://placehold.co/100x75/A7F3D0/10B981?text=Img1", alt="Attached image 1", cls="rounded max-w-full h-auto max-h-32 object-contain", onerror="this.onerror=null; this.src='https://placehold.co/100x75/FEE2E2/DC2626?text=Error';"),
+        #                         P("image_sample_1.jpg (78 KB)", cls="text-xs text-base-content/70 mt-1 truncate")
+        #                     ),
+        #                     cls="p-1.5 rounded-md bg-base-100/50 border border-base-300/50"
+        #                 ),
+        #                 Div(
+        #                     Div(
+        #                         Img(src="https://placehold.co/100x75/A7F3D0/10B981?text=Img2", alt="Attached image 2", cls="rounded max-w-full h-auto max-h-32 object-contain", onerror="this.onerror=null; this.src='https://placehold.co/100x75/FEE2E2/DC2626?text=Error';"),
+        #                         P("photo_of_rash.png (120 KB)", cls="text-xs text-base-content/70 mt-1 truncate")
+        #                     ),
+        #                     cls="p-1.5 rounded-md bg-base-100/50 border border-base-300/50"
+        #                 ),
+        #                 Div(
+        #                     Div(
+        #                         Img(src="https://placehold.co/100x75/A7F3D0/10B981?text=Img3", alt="Attached image 3", cls="rounded max-w-full h-auto max-h-32 object-contain", onerror="this.onerror=null; this.src='https://placehold.co/100x75/FEE2E2/DC2626?text=Error';"),
+        #                         P("scan_result_view.jpeg (95 KB)", cls="text-xs text-base-content/70 mt-1 truncate")
+        #                     ),
+        #                     cls="p-1.5 rounded-md bg-base-100/50 border border-base-300/50"
+        #                 ),
+        #                 cls="mt-2 pt-2 space-y-2 border-t border-green-400/50"
+        #             ),
+        #             cls="chat-bubble chat-bubble-primary user-message-gradient rounded-b-xl shadow-md"
+        #         ),
+        #         cls="flex items-end max-w-xs sm:max-w-md md:max-w-lg flex-row-reverse"
+        #     ),
+        #     cls="flex justify-end"
+        # ),
+        # Div(
+        #     Div(
+        #         Div(
+        #             Div(
+        #                 Span("smart_toy", cls="material-icons emoji-icon"),
+        #                 cls="bg-transparent text-neutral-content rounded-full w-8 h-8 text-sm flex items-center justify-center"
+        #             ),
+        #             cls="avatar placeholder p-0 w-8 h-8 rounded-full mr-2 bg-base-300"
+        #         ),
+        #         Div(
+        #             P("Understood. And for the documents?", cls="text-sm leading-relaxed chat-message-text"),
+        #             cls="chat-bubble chat-bubble-neutral bg-base-300 text-base-content rounded-bl-none shadow-md"
+        #         ),
+        #         cls="flex items-end max-w-xs sm:max-w-md md:max-w-lg"
+        #     ),
+        #     cls="flex justify-start"
+        # ),
+        # Div(
+        #     Div(
+        #         Div(
+        #             Div(
+        #                 Span("person", cls="material-icons emoji-icon"),
+        #                 cls="bg-transparent text-neutral-content rounded-full w-8 h-8 text-sm flex items-center justify-center"
+        #             ),
+        #             cls="avatar placeholder p-0 w-8 h-8 rounded-full ml-2 user-message-gradient"
+        #         ),
+        #         Div(
+        #             P("And here are some PDF documents.", cls="text-sm leading-relaxed chat-message-text"),
+        #             Div(
+        #                 Div(
+        #                     Div(
+        #                         Span("attachment", cls="material-icons emoji-icon text-xl text-primary flex-shrink-0"),
+        #                         Div(
+        #                             P("lab_results_q1.pdf", cls="text-xs font-medium text-base-content/90 truncate"),
+        #                             P("256 KB", cls="text-xs text-base-content/70"),
+        #                             cls="flex-grow overflow-hidden"
+        #                         ),
+        #                         cls="flex items-center gap-2"
+        #                     ),
+        #                     cls="p-1.5 rounded-md bg-base-100/50 border border-base-300/50"
+        #                 ),
+        #                 Div(
+        #                     Div(
+        #                         Span("attachment", cls="material-icons emoji-icon text-xl text-primary flex-shrink-0"),
+        #                         Div(
+        #                             P("medical_history_summary.pdf", cls="text-xs font-medium text-base-content/90 truncate"),
+        #                             P("512 KB", cls="text-xs text-base-content/70"),
+        #                             cls="flex-grow overflow-hidden"
+        #                         ),
+        #                         cls="flex items-center gap-2"
+        #                     ),
+        #                     cls="p-1.5 rounded-md bg-base-100/50 border border-base-300/50"
+        #                 ),
+        #                 Div(
+        #                     Div(
+        #                         Span("attachment", cls="material-icons emoji-icon text-xl text-primary flex-shrink-0"),
+        #                         Div(
+        #                             P("prescription_details.pdf", cls="text-xs font-medium text-base-content/90 truncate"),
+        #                             P("128 KB", cls="text-xs text-base-content/70"),
+        #                             cls="flex-grow overflow-hidden"
+        #                         ),
+        #                         cls="flex items-center gap-2"
+        #                     ),
+        #                     cls="p-1.5 rounded-md bg-base-100/50 border border-base-300/50"
+        #                 ),
+        #                 cls="mt-2 pt-2 space-y-2 border-t border-green-400/50"
+        #             ),
+        #             cls="chat-bubble chat-bubble-primary user-message-gradient rounded-b-xl shadow-md"
+        #         ),
+        #         cls="flex items-end max-w-xs sm:max-w-md md:max-w-lg flex-row-reverse"
+        #     ),
+        #     cls="flex justify-end"
+        # ),
         Div(id="messagesEndRef", cls="h-0"), 
         id="messagesArea",
         cls="flex-grow p-3 sm:p-4 space-y-3 overflow-y-auto bg-base-200 scrollbar-thin"
@@ -715,8 +734,6 @@ def get(auth):
         ),
         cls="flex flex-col flex-grow h-full p-4 md:p-6 items-center justify-between relative"
     )
-
-
 
 
     journal_entries_list_items = [
