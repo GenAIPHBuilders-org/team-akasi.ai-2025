@@ -38,6 +38,15 @@ let chatFormEl = null;
 // We keep chatInputEl for initial setup, but will rely on event.target within htmx:configRequest
 let chatInputEl = null;
 
+// --- WELLNESS JOURNAL UI (Manual Modal Handling) ---
+let manualEntryModalJsEl = null;
+let manualEntryFormJsEl = null; // The form that will be submitted via HTMX
+let manualDateInputJsEl = null;
+let addManualEntryButtonJsEl = null;
+let cancelManualEntryButtonJsEl = null; // The "Cancel" button inside the modal
+let closeManualEntryModalButtonJsEl = null; // The 'X' button inside the modal-box
+
+
 
 // Function to initialize chat-related elements (call this in DOMContentLoaded)
 function initializeChatAttachmentElements() {
@@ -523,18 +532,114 @@ function scrollChatToEnd() {
     }
 }
 
+
+function initializeJournalModalElements() {
+    manualEntryModalJsEl = document.getElementById('manualEntryModal');
+    manualEntryFormJsEl = document.getElementById('manualEntryForm');
+    manualDateInputJsEl = document.getElementById('manualDate');
+    addManualEntryButtonJsEl = document.getElementById('addManualEntryButton');
+    cancelManualEntryButtonJsEl = document.getElementById('cancelManualEntryButton');
+
+    // Get the 'X' button inside the modal-box of the manualEntryModal
+    if (manualEntryModalJsEl) {
+        closeManualEntryModalButtonJsEl = manualEntryModalJsEl.querySelector('.modal-box #closeManualEntryModalButtonInternal'); 
+        // Note: The ID in main.py for this button was 'closeManualEntryModalButtonInternal'
+        // Ensure this matches the ID you have in the FT component for that button.
+        // If you used `id="closeManualEntryModalButton"` in FT, change selector here or ID in FT.
+        // For now, assuming 'closeManualEntryModalButtonInternal' as per Python snippet.
+        // If it's simply the one in the <form method="dialog">, DaisyUI handles it.
+        // The python code has: Button(Span("close", cls="material-icons emoji-icon"), id="closeManualEntryModalButtonInternal", ... )
+    }
+
+
+    if (addManualEntryButtonJsEl && manualEntryModalJsEl) {
+        addManualEntryButtonJsEl.addEventListener('click', () => {
+            if (manualEntryFormJsEl) {
+                manualEntryFormJsEl.reset(); // Reset form fields
+            }
+            if (manualDateInputJsEl) {
+                // Set default date to today
+                manualDateInputJsEl.value = new Date().toISOString().split('T')[0];
+            }
+            if (typeof manualEntryModalJsEl.showModal === 'function') {
+                manualEntryModalJsEl.showModal();
+            } else {
+                console.error("manualEntryModalJsEl.showModal is not a function. Modal element not found or DaisyUI not loaded correctly.");
+            }
+        });
+    }
+
+    if (cancelManualEntryButtonJsEl && manualEntryModalJsEl) {
+        cancelManualEntryButtonJsEl.addEventListener('click', () => {
+            if (typeof manualEntryModalJsEl.close === 'function') {
+                manualEntryModalJsEl.close();
+            }
+        });
+    }
+
+    // This handles the 'X' button inside the modal box if it's not part of a method="dialog" form
+    if (closeManualEntryModalButtonJsEl && manualEntryModalJsEl) {
+         closeManualEntryModalButtonJsEl.addEventListener('click', (e) => {
+            e.preventDefault(); // Good practice if it's a button not meant to submit
+            if (typeof manualEntryModalJsEl.close === 'function') {
+                manualEntryModalJsEl.close();
+            }
+        });
+    }
+
+    // Handle HTMX form submission events for the manual entry form
+    if (manualEntryFormJsEl && manualEntryModalJsEl) {
+        manualEntryFormJsEl.addEventListener('htmx:afterOnLoad', function(event) {
+            // htmx:afterOnLoad is triggered after the new content has been loaded and processed.
+            if (event.detail.successful && event.target === manualEntryFormJsEl) {
+                if (typeof manualEntryModalJsEl.close === 'function') {
+                    manualEntryModalJsEl.close(); // Close modal on successful HTMX submission
+                }
+                showToast("Journal entry added successfully!", "success");
+                // The server response for ADD should include OOB swaps for placeholder/clear button.
+                // The global htmx:afterSwap listener will also run to ensure consistency.
+            }
+        });
+
+        manualEntryFormJsEl.addEventListener('htmx:responseError', function(event) {
+            if (event.target === manualEntryFormJsEl) {
+                showToast("Error adding journal entry. Please try again.", "error");
+                // Optionally, keep the modal open or provide more specific error feedback.
+            }
+        });
+    }
+}
+
+
+
+
 document.body.addEventListener('htmx:afterSwap', function(event) {
+    // --- Scroll chat to end (existing logic) ---
     const messagesArea = document.getElementById('messagesArea');
-    if (messagesArea) {
-        let shouldScroll = false;
-        if (event.detail.target === messagesArea || (event.detail.elt && messagesArea.contains(event.detail.elt))) {
-            shouldScroll = true;
-        }
-        if (shouldScroll) {
-            scrollChatToEnd();
+    if (messagesArea && (event.detail.target === messagesArea || (event.detail.elt && messagesArea.contains(event.detail.elt)))) {
+        scrollChatToEnd(); // Assuming scrollChatToEnd is defined
+    }
+
+    // --- Journal UI consistency check ---
+    const journalList = document.getElementById('journalEntriesList');
+    const noEntriesDiv = document.getElementById('noJournalEntries');
+    const clearContainer = document.getElementById('clearJournalContainer');
+
+    if (journalList && noEntriesDiv && clearContainer) {
+        // Count children that are actual entries (have an ID starting with 'journal-entry-')
+        // This ensures we're counting rendered entry elements.
+        const entryItemsCount = journalList.querySelectorAll('[id^="journal-entry-"]').length;
+
+        if (entryItemsCount === 0) {
+            noEntriesDiv.style.display = 'flex';
+            clearContainer.style.display = 'none';
+        } else {
+            noEntriesDiv.style.display = 'none';
+            clearContainer.style.display = 'flex';
         }
     }
 });
+
 
 document.addEventListener('DOMContentLoaded', () => {
     initializeScanAnimationElements();
@@ -544,6 +649,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }, 4000); // 2000 milliseconds = 2 seconds
     updateScanAnimationVisuals(); // Ensure initial idle state is shown
     initializeChatAttachmentElements();
+    initializeJournalModalElements(); // <--- ADD THIS CALL
 });
 
 

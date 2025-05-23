@@ -1,4 +1,5 @@
 import datetime
+import random
 from datetime import datetime 
 from fasthtml.svg import Svg, Defs, Pattern, Path, Rect, Text, NotStr, Ellipse, Circle, Group, G
 from fasthtml.common import *
@@ -44,8 +45,9 @@ supabase_url = os.getenv("SUPABASE_URL_NEW")
 supabase_anon_key = os.getenv("SUPABASE_ANON_KEY_NEW")
 supabase: Client = create_client(supabase_url, supabase_anon_key)
 
-
-
+# --- Global Store for Pending Journal Updates ---
+pending_journal_updates: List[dict] = []
+pending_journal_updates_2: List[dict] = []
 
 def use_auth_context(access_token, refresh_token=None):
     """Set authentication context on the global client for the current request"""
@@ -68,7 +70,7 @@ def auth_before(req, sess):
 
 beforeware = Beforeware(
     auth_before,
-    skip=[r'/favicon\.ico', r'/static/.*', r'.*\.css', r'.*\.js', '/login', '/signup', '/']
+    skip=[r'/favicon\.ico', r'/htmx/.*', r'/static/.*', r'.*\.css', r'.*\.js', '/login', '/signup', '/']
 )
 
 # --- Initialize FastHTML App ---
@@ -267,14 +269,16 @@ async def process_files_to_base64_list(files: list[UploadFile]) -> list[dict]:
     return processed_attachments
 
 
-# --- BUILDING THE LLM AGENT 1 --- 
+# --- 🟣🟣🟣🟣 BUILDING THE LLM AGENT 1 🟣🟣🟣🟣 --- 
 # Create an AI agent that has image tool that inteprets the message gets the data then gives it to the agent
 # Then add a workflow to the agent so that you can control the body scanner
-
+model_1_claude_haiku = "anthropic.claude-3-haiku-20240307-v1:0"
+model_2_claude_3_5_sonnet =  "anthropic.claude-3-5-sonnet-20240620-v1:0"
+model_2_claude_3_5_sonnet_v2 =  "anthropic.claude-3-5-sonnet-20241022-v2:0"
 
 
 llm = init_chat_model(
-    "us.anthropic.claude-3-7-sonnet-20250219-v1:0",
+    "anthropic.claude-3-5-sonnet-20241022-v2:0",
     model_provider="bedrock_converse",
     region_name='us-west-2',
     temperature = 0.1,
@@ -503,8 +507,11 @@ graph_builder.add_edge("execute_tool_node", "decide_action_node")
 
 graph_1 = graph_builder.compile(checkpointer=memory)
 
+# --- 🟣🟣🟣🟣 BUILDING THE LLM AGENT 1 🟣🟣🟣🟣 --- 
 
-# --- Workflow 1 : BODY SCANNER COMMANDER ------- 
+
+
+# ---🔵🔵🔵🔵 Workflow 1 : BODY SCANNER COMMANDER  🔵🔵🔵🔵------- 
 # Create an AI agent that has image tool that inteprets the message gets the data then gives it to the agent
 # Then add a workflow to the agent so that you can control the body scanner
 from pydantic import BaseModel, Field
@@ -577,50 +584,292 @@ graph_builder_2.add_node("llm_body_ui_commander", body_scanner_commands)
 graph_builder_2.add_edge(START, "llm_body_ui_commander")
 graph_workflow_1 = graph_builder_2.compile()
 
-
-
-# --- Workflow 1 : BODY SCANNER COMMANDER ------- 
+# ---🔵🔵🔵🔵 Workflow 1 : BODY SCANNER COMMANDER  🔵🔵🔵🔵------- 
 
 
 
 
 
 
-# --- Workflow 2 : JOURNAL ENTRY CONTROLLER  START ------- 
+# --- ⚪⚪⚪⚪ Workflow 2 : JOURNAL ENTRY CONTROLLER  START  ⚪⚪⚪⚪ ------- 
 
 
 
-async def process_wellness_journal_data(conversation_messages: List[BaseMessage]):
+system_prompt_content_wf_2 = """You are an expert AI system responsible for managing a patient's wellness journal entries.
+Your primary goal is to analyze the provided conversation history between a patient and an AI health assistant (Akasi), along with a list of existing wellness journal entries, to determine if a journal entry needs to be added, updated, or removed.
+You MUST output a single JSON object that strictly conforms to the 'WellnessJournalOperation' schema.
+
+**Inputs You Will Receive:**
+1.  **Conversation History:** The dialogue between the patient and Akasi.
+2.  **Existing Wellness Journal Entries:** A JSON string representing a list of current journal entries. Each entry in this list follows the same structure as your output. If no entries exist, this might be an empty list or null.
+
+
+**Your Task:**
+Based on a thorough analysis of these inputs, decide on ONE action ('ADD', 'UPDATE', or 'REMOVE') and construct the corresponding JSON output. Focus on the most recent and relevant parts of the conversation to guide your decision, but be aware of the entire context and existing entries.
+
+**Guidelines for Determining the Action and Fields:**
+
+**General:**
+* `wellness_journal_entry_date`: Always format as YYYY-MM-DD. Infer from conversation if possible (e.g., "today," "last Tuesday," "on May 15th"). If an event date isn't clear but the conversation is current, use the current date for ADD/UPDATE.
+
+**If `wellness_journal_entry_action` is "ADD":**
+* **When to ADD:** The conversation introduces a new, distinct health concern, event, significant symptom update, or a topic that is not adequately covered by any existing journal entry.
+* `wellness_journal_entry_id`: Generate a new, unique string identifier. If existing entries have numerical IDs like "1", "2", the new ID should be the next sequential number (e.g., "3"). If no entries exist, start with "1".
+* `wellness_journal_title`: Create a concise, new title that accurately reflects the main subject of this new entry based on the conversation (e.g., "Sudden Lower Back Pain," "Discussion about Sleep Quality").
+* `wellness_journal_current_summary`: Write a comprehensive summary detailing the relevant information, symptoms, patient statements, and context for this new entry from the current conversation.
+* `wellness_journal_entry_date`: Use the date the event/symptom occurred if mentioned, or the current date of the conversation.
+
+**If `wellness_journal_entry_action` is "UPDATE":**
+* **When to UPDATE:** The conversation provides significant new information, clarifications, progress updates, or changes related to an *existing* wellness journal entry. The new information should modify or add to the existing entry rather than represent an entirely new topic.
+* `wellness_journal_entry_id`: This MUST be the `wellness_journal_entry_id` of the specific existing entry that needs to be updated. Carefully match it from the provided list of entries.
+* `wellness_journal_title`: Usually, this will be the same as the existing entry's title. Only change it if the core subject of the entry has significantly evolved due to the new information in the conversation.
+* `wellness_journal_current_summary`: This is crucial. The summary should reflect the *latest state* of the journaled topic. It might involve integrating new information with the old, replacing outdated details, or adding new observations from the conversation.
+* `wellness_journal_entry_date`: Update to the date of the new information or the current date of the conversation.
+
+**If `wellness_journal_entry_action` is "REMOVE":**
+* **When to REMOVE:** The conversation explicitly indicates that an existing journal entry is no longer relevant, an issue has been fully resolved and the user wants it archived/removed, or the user directly requests its deletion. Do not remove entries lightly; there should be a clear signal.
+* `wellness_journal_entry_id`: This MUST be the `wellness_journal_entry_id` of the specific existing entry to be removed.
+* `wellness_journal_title`: Use the title of the entry being removed.
+* `wellness_journal_current_summary`: Use the summary from the entry being removed, or a placeholder like "Entry marked for removal."
+* `wellness_journal_entry_date`: Use the date from the entry being removed or the current date.
+
+**Important Considerations:**
+* **One Action Only:** You must decide on a single operation (ADD, UPDATE, or REMOVE) per analysis.
+* **ID Management for UPDATE/REMOVE:** Be extremely careful to use the correct existing `wellness_journal_entry_id` when updating or removing. If no suitable existing entry is found for an update, consider if it should be an ADD operation instead.
+* **Focus on User Intent:** Interpret the conversation to understand what the user intends regarding their journal. Akasi's questions and the patient's responses are key.
+* **Clarity and Conciseness:** Ensure titles and summaries are clear, concise, and accurately reflect the conversation.
+
+Analyze the inputs carefully and generate the single JSON object representing the most appropriate wellness journal operation. YOU CAN RETURN "NONE" IF THERE IS NO NEED TO PUT AN ENTRY
+"""
+
+
+class WellnessJournalOperation(BaseModel):
+    """
+    Represents a command to manage a patient's wellness journal entry.
+    This command is derived from analyzing the conversation history between the patient
+    and an AI assistant, as well as any existing wellness journal entries.
+    It specifies whether to add a new entry, update an existing one, or remove one,
+    along with the necessary details for the operation.
+    """
+
+    wellness_journal_entry_id: str = Field(
+        ...,
+        description=(
+            "The unique identifier for the wellness journal entry. "
+            "For 'ADD' operations, this should be a new, unique ID (e.g., if existing IDs are '1', '2', a new one could be '3'; if no entries exist, start with '1'). "
+            "For 'UPDATE' or 'REMOVE' operations, this MUST exactly match the ID of an existing entry from the provided list."
+        )
+    )
+
+    wellness_journal_title: str = Field(
+        ...,
+        description=(
+            "A concise and descriptive title for the wellness journal entry. "
+            "For 'ADD', create a new title reflecting the conversation's topic. "
+            "For 'UPDATE', this can be the existing title or an updated one if the entry's focus has significantly changed. "
+            "For 'REMOVE', this should be the title of the entry being removed."
+        )
+    )
+
+    wellness_journal_current_summary: str = Field(
+        ...,
+        description=(
+            "A 1 sentence short summary of the patient's current condition, symptoms, feelings, or relevant information for this journal entry, "
+            "derived primarily from the latest relevant parts of the conversation. "
+            "For 'ADD', this is a new summary. "
+            "For 'UPDATE', this should reflect the most current information, potentially integrating or replacing the previous summary. "
+            "For 'REMOVE', this can be the summary of the entry being removed or a placeholder like 'Entry removed'."
+        )
+    ) 
+
+    wellness_journal_entry_action: Literal["ADD", "UPDATE", "REMOVE"] = Field(
+        ...,
+        description=(
+            "The action to perform on the wellness journal entry. Must be one of 'ADD', 'UPDATE', or 'REMOVE'."
+        )
+    )
+
+    wellness_journal_entry_date: str = Field(
+        ...,
+        description=(
+            "The date associated with the wellness journal entry, in YYYY-MM-DD format. "
+            "Try to infer this from the conversation (e.g., 'today', 'yesterday', specific dates mentioned). "
+            "If no specific date is mentioned for the event, use the current date of the conversation for 'ADD' or 'UPDATE' operations. "
+            "For 'REMOVE', use the date of the entry being removed or the current date."
+        )
+    )
+
+
+
+class Workflow2State(MedicalAgentState):
+    # Final structured response from the agent
+    wellness_journal_operation: WellnessJournalOperation
+
+
+graph_builder_3 = StateGraph(Workflow2State)
+
+
+
+def wellness_journal_entry_generator_node(state: Workflow2State):
+    print("\n--- Entered wellness_journal_entry_generator_node --------------------")
+
+
+    print(pending_journal_updates)
+
+    conversation_history = state["messages"]
+    existing_entries_str = state.get("existing_journal_entries_json_string", "[]") 
+
+
+    # Ensure the LLM used here supports ainvoke and structured output
+    wellness_journal_llm = llm.with_structured_output(WellnessJournalOperation)
+
+    try:
+        current_pending_updates_str = json.dumps(pending_journal_updates)
+    except TypeError as e:
+        print(f"Error serializing pending_journal_updates: {e}. Using empty list.")
+        current_pending_updates_str = "[]"
+
+
+    if not conversation_history:
+        print("Warning: No conversation history found for journal entry generation.")
+        return {"wellness_journal_operation": None} 
+
+    # Prepare messages for the journal LLM
+    messages_for_journal_llm: list[BaseMessage] = [
+        SystemMessage(content=system_prompt_content_wf_2), # system_prompt_content is updated
+        HumanMessage(content=f"Here are the existing wellness journal entries:\n{pending_journal_updates_2}"),
+    ]
+
+    if all(isinstance(msg, BaseMessage) for msg in conversation_history):
+        messages_for_journal_llm.extend(conversation_history)
+    else:
+        print("Warning: Conversation history contains non-BaseMessage objects. Attempting conversion or skipping.")
+
+
+
+    messages_for_journal_llm.append(
+        HumanMessage(content="Based on the full conversation history, the EXTERNALLY SAVED journal entries, AND THE PENDING updates, what is the single most appropriate wellness journal operation (ADD, UPDATE, or REMOVE) to perform next? Provide only the JSON object.")
+    )
+
+
+    try:
+
+        print("LLM call with structured output would happen here.")
+        journal_operation_result = wellness_journal_llm.invoke(messages_for_journal_llm)
+
+        if journal_operation_result:
+            print(f"💛 Wellness journal LLM result: {journal_operation_result}")
+            print(journal_operation_result)
+            print(type(journal_operation_result))
+            return {"wellness_journal_operation": journal_operation_result}
+        else:
+            print("Wellness journal LLM returned no result.")
+            return {"wellness_journal_operation": None}
+
+    except Exception as e:
+        print(f"Error in wellness_journal_llm.invoke: {e}")
+        return {"wellness_journal_operation": None}
+
+
+
+
+
+graph_builder_3.add_node("llm_wellness_journal", wellness_journal_entry_generator_node)
+graph_builder_3.add_edge(START, "llm_wellness_journal")
+graph_workflow_2 = graph_builder_3.compile()
+
+
+
+
+
+async def process_wellness_journal_data(input_payload_for_journal):
     """
     Simulates processing of conversation history for a wellness journal entry.
     Prints a preconfigured output after a delay.
     """
-    print("--- Wellness Journal Processor: Starting (simulated 10s delay) ---")
-    await asyncio.sleep(10)  # Simulate processing time
-    
-    # Preconfigured output
-    # Note: Corrected the wellness_journal_title and summary concatenation
-    journal_output = {
-        "wellness_journal_entry_id": "1",
-        "wellness_journal_title": "Chest Pain Episode",
-        "wellness_journal_current_summary": "Pain is sharp, 7/10, radiates to left arm...",
-        "wellness_journal_entry_action": "ADD", # Can be "ADD", "REMOVE", "UPDATE"
-        "wellness_journal_entry_date": datetime.now().isoformat() 
+    print("--- Wellness Journal Processor UI PROCESS---")
+
+
+    journal_output_process_2 = graph_workflow_2.invoke(input_payload_for_journal)
+    actual_journal_operation = journal_output_process_2.get("wellness_journal_operation")
+
+
+    wellness_journal_final_entries = {
+        "wellness_journal_entry_id": actual_journal_operation.wellness_journal_entry_id,
+        "wellness_journal_title": actual_journal_operation.wellness_journal_title,
+        "wellness_journal_current_summary": actual_journal_operation.wellness_journal_current_summary,
+        "wellness_journal_entry_action": actual_journal_operation.wellness_journal_entry_action, 
+        "wellness_journal_entry_date": actual_journal_operation.wellness_journal_entry_date  
+    }    
+
+    print(wellness_journal_final_entries)
+    pending_journal_updates.append(wellness_journal_final_entries)
+    pending_journal_updates_2.append(wellness_journal_final_entries)
+
+    print("💚 --- JOURNAL UPDATES NEW VALUE---")
+    print(pending_journal_updates)
+
+    print("💚 --- JOURNAL UPDATES NEW VALUE---")
+    return wellness_journal_final_entries
+
+
+
+
+
+
+
+# --- FT Component for a single journal entry ---
+def render_single_journal_entry_ft(entry_data: dict):
+    severity_map = {
+        1: {"text": "Low", "classes": "text-green-700 border-green-400 bg-green-100"},
+        2: {"text": "Medium", "classes": "text-yellow-700 border-yellow-400 bg-yellow-100"},
+        3: {"text": "High", "classes": "text-red-700 border-red-400 bg-red-100"},
     }
+    # Use .get with a default for severity, and ensure it's an int
+    severity_val = entry_data.get("wellness_journal_severity")
+    try:
+        severity_int = int(severity_val) if severity_val is not None else 1
+    except ValueError:
+        severity_int = 1 # Default if conversion fails
+        
+    severity_info = severity_map.get(severity_int, {"text": "N/A", "classes": "text-gray-600 border-gray-300 bg-gray-100"})
     
-    print(f"--- Wellness Journal Processor: Completed ---")
-    print(f"Wellness Journal Input Messages Count: {len(conversation_messages)}") # To verify input
-    print(f"Wellness Journal Output: {journal_output}")
-    # In a future step, this function could trigger an HTMX OOB swap 
-    # or send data via WebSockets/SSE to the client for a new animation.
-    # For now, it just prints to the server console.
-    return journal_output 
+    entry_id_val = entry_data.get("wellness_journal_entry_id", f"entry-{time.time_ns()}")
+    item_id_attr = f"journal-entry-{entry_id_val}" # Unique ID for the div
+
+    # Format date nicely
+    try:
+        date_obj = datetime.fromisoformat(entry_data.get("wellness_journal_entry_date", datetime.now().isoformat()))
+        formatted_date = date_obj.strftime('%b %d, %Y') # e.g., May 23, 2025
+    except ValueError:
+        formatted_date = "Invalid Date"
+
+
+    return Div(
+        Div(
+            H3(entry_data.get("wellness_journal_title", "No Title"), cls="font-medium text-base-content/90 text-sm"),
+            Span(severity_info["text"], cls=f"text-xs font-semibold px-2 py-0.5 rounded-full border {severity_info['classes']}"),
+            cls="flex justify-between items-start mb-1"
+        ),
+        P(entry_data.get("wellness_journal_current_summary", "No summary."), cls="text-base-content/80 text-xs mb-1.5 leading-relaxed"),
+        P(formatted_date, cls="text-base-content/70 text-xs text-right"),
+        Button(
+            Span("delete", cls="material-icons emoji-icon text-sm"), # Smaller icon
+            hx_post="/htmx/journal_entry_action",
+            hx_vals=json.dumps({"wellness_journal_entry_id": str(entry_id_val), "wellness_journal_entry_action": "REMOVE"}),
+            hx_target=f"#{item_id_attr}", # Target self for removal
+            hx_swap="outerHTML",          # Remove the element
+            # Add hx_confirm here if desired: hx_confirm="Are you sure you want to remove this entry?"
+            cls="btn btn-xs btn-circle btn-ghost text-error absolute top-1 right-1 opacity-50 hover:opacity-100",
+            title="Remove Entry"
+        ),
+        cls="bg-base-100/80 backdrop-blur-sm rounded-lg p-3 shadow-md hover:shadow-lg transition-shadow border border-base-300/80 relative animate-fadeIn", # Added animation
+        id=item_id_attr
+    )
 
 
 
-
-
-# --- Workflow 2 : JOURNAL ENTRY CONTROLLER  END ------- 
+# --- ⚪⚪⚪⚪ Workflow 2 : JOURNAL ENTRY CONTROLLER  START  ⚪⚪⚪⚪ ------- 
 
 
 
@@ -722,8 +971,18 @@ async def llm_agent_1(user_message: str, attachments_data: list[dict] = None):
 
     body_scan_command_wf = graph_workflow_1.invoke(workflow_input_state)
 
+    print("------------------ body scanner command workflow output -----------------------")    
 
-    asyncio.create_task(process_wellness_journal_data(workflow_input_state["messages"]))
+    print(body_scan_command_wf)
+
+    workflow_input_state = {
+        "messages": final_state.get("messages", []), 
+        "input_base64_images": None,
+        "body_scanner_command": None 
+    }    
+
+
+    asyncio.create_task(process_wellness_journal_data(workflow_input_state))
     print("--- Wellness Journal Processor: Task scheduled (will run in background) ---")
 
 
@@ -945,7 +1204,7 @@ async def load_typing_indicator_handler(req):
 
 
 @rt("/get_ai_actual_response")
-async def get_ai_actual_response(req, sess):
+async def get_ai_actual_response_route(req, sess):
     get_user_message = req.query_params.get("user_message", "")
     target_id = req.query_params.get("target_id", "") 
     attachment_uuids_str = req.query_params.get("attachment_uuids", "") # Get the UUIDs string
@@ -954,7 +1213,9 @@ async def get_ai_actual_response(req, sess):
     
     print("================== /get_ai_actual_response - PRINTING get_user_message =======================")
 
-    print(get_user_message)      
+    print(get_user_message) 
+    print("================== SEEING IF THE PENDING JOURNAL UPDATES HAS NEW ENTRIES  =======================")         
+    print(pending_journal_updates)
 
     print("================== /get_ai_actual_response - PRINTING  user_message_text =======================")
 
@@ -1004,7 +1265,7 @@ async def get_ai_actual_response(req, sess):
     llm_output = await llm_agent_1(user_message_text, attachments_data=retrieved_attachments_from_supabase) 
 
     print("-------- IM IN THE  /get_ai_actual_response  AFTER THE ai_chat_bubble_component -------------")
-    print(llm_output)
+
 
     # Trigger an async function that takes in the 
 
@@ -1021,10 +1282,15 @@ async def get_ai_actual_response(req, sess):
         js_command_call = f"executeBodyScannerCommand('{scanner_command}');"
         animation_script_component = Script(f"(() => {{ try {{ {js_command_call} }} catch (e) {{ console.error('Error executing scanner command:', e); }} }})();")
 
+    # Prepare headers for HX-Trigger. Using JSON format for HX-Trigger is robust.
+    response_headers = {"HX-Trigger": json.dumps({"loadJournalUpdate": True})}
+
+    content_tuple = [ai_chat_bubble_component]
     if animation_script_component:
-        return ai_chat_bubble_component, animation_script_component
-    else:
-        return ai_chat_bubble_component
+        content_tuple.append(animation_script_component)
+
+    # Use FtResponse to send content along with custom headers
+    return FtResponse(content=tuple(content_tuple), headers=response_headers)
 
 
 
@@ -1263,22 +1529,46 @@ def get(auth):
             cls="p-3.5 border-b border-primary/60 primary-green-gradient flex justify-between items-center"
         ),
         Div(
-            *journal_entries_list_items,
             id="journalEntriesList",
             cls="flex-grow overflow-y-auto p-3 space-y-2.5 scrollbar-thin"
         ),
-        Div(
+        Div( # Placeholder for when no entries exist
+            Span("info_outline", id="noJournalIconContainer", cls="material-icons mb-2 text-4xl text-base-content/50"),
+            P("No entries yet.", cls="text-sm text-base-content/70"),
+            P("Entries from chat or manual additions will appear here.", cls="text-xs mt-1 text-base-content/60"),
+            id="noJournalEntries",
+            cls="flex flex-col items-center justify-center h-full text-center py-6",
+            style="display: flex;" # Initially visible as the list is empty
+        ),
+        Div( # Clear All Button Container
             Button(
                 Span("delete_sweep", cls="material-icons emoji-icon mr-1"), " Clear All",
                 id="clearAllJournalButton",
                 cls="btn btn-xs btn-outline btn-error flex items-center gap-1.5",
-                title="Clear all journal entries"
+                title="Clear all journal entries",
+                hx_post="/htmx/clear_journal",
+                # The response from /htmx/clear_journal will handle OOB swaps
+                # for #journalEntriesList, #noJournalEntries, and #clearJournalContainer
+                hx_confirm="Are you sure you want to clear all journal entries?" # Optional confirmation
             ),
             id="clearJournalContainer",
             cls="p-2.5 border-t border-primary/30 flex justify-end",
-            style="display: flex;"
+            style="display: none;" # Initially hidden, JS/HTMX will show it when entries exist
         ),
         cls="w-full md:w-2/5 lg:w-1/3 h-full border-l border-primary/30 flex flex-col bg-base-100/50"
+    )
+
+ 
+
+
+    # This Div is crucial for HTMX to receive journal updates triggered by the server
+    journal_update_event_handler_div = Div(
+        id="journalUpdateEventHandler", 
+        hx_get="/htmx/get_journal_update",
+        hx_trigger="loadJournalUpdate from:body", # Listens for 'loadJournalUpdate' event on the body
+        hx_target="#journalEntriesList",          # The new entry HTML will go here
+        hx_swap="afterbegin",                     # Prepend it to the list
+        # This div itself can be empty and hidden; it's a mechanism.
     )
 
     right_panel_scanner_journal_root = Div(
@@ -1296,6 +1586,7 @@ def get(auth):
     page_content = Div(
         left_panel_chatbox,
         right_panel_wrapper,
+        journal_update_event_handler_div,
         cls="flex flex-col md:flex-row h-full text-base-content p-2 sm:p-4 gap-2 sm:gap-4 font-sans"
     )
 
@@ -1318,56 +1609,42 @@ def get(auth):
         id="narrowScanModal", cls="modal"
     )
 
+    # --- Manual Entry Modal (Updated for HTMX submission) ---
     manual_entry_modal = Dialog(
-        Div(
-            Form(
+        Div( # Modal Box
+            Form( # For DaisyUI 'X' button to close via method="dialog"
                 Button(
-                    Span("close", cls="material-icons emoji-icon"),
-                    id="closeManualEntryModalButton",
+                    Span("close", cls="material-icons emoji-icon"), 
+                    # id="closeManualEntryModalButtonInternal" # JS will target this if needed
                     cls="btn btn-sm btn-circle btn-ghost absolute right-2 top-2"
-                ),
-                method="dialog"
+                ), 
+                method="dialog" # This form closes the dialog
             ),
             H3("Add Manual Journal Entry", cls="font-bold text-lg mb-4"),
-            Form(
+            Form( # This is the actual data submission form, now with HTMX attributes
+                Div(Label("Title / Body Part", For="manualTitle", cls="block text-xs font-medium text-base-content/80 mb-1"), Input(type="text", id="manualTitle", name="title", placeholder="E.g., Headache, Stomach Ache", cls="input input-bordered input-sm w-full", required=True), cls="mb-3"),
+                Div(Label("Status / Severity", For="manualStatus", cls="block text-xs font-medium text-base-content/80 mb-1"), Select(Option("Low", value="1", selected=True), Option("Medium", value="2"), Option("High", value="3"), id="manualStatus", name="status", cls="select select-bordered select-sm w-full"), cls="mb-3"),
+                Div(Label("Summary / Description", For="manualSummary", cls="block text-xs font-medium text-base-content/80 mb-1"), Textarea(id="manualSummary", name="summary", placeholder="Describe the issue or feeling...", rows="3", cls="textarea textarea-bordered textarea-sm w-full", required=True), cls="mb-3"),
+                Div(Label("Date", For="manualDate", cls="block text-xs font-medium text-base-content/80 mb-1"), Input(type="date", id="manualDate", name="date", cls="input input-bordered input-sm w-full", required=True), cls="mb-4"),
+                Input(type="hidden", name="wellness_journal_entry_action", value="ADD"), # Specify the action for the backend
                 Div(
-                    Label("Title / Body Part", For="manualTitle", cls="block text-xs font-medium text-base-content/80 mb-1"),
-                    Input(type="text", id="manualTitle", name="title", placeholder="E.g., Headache, Stomach Ache", cls="input input-bordered input-sm w-full", required=True),
-                    cls="mb-3"
+                    Button("Cancel", type="button", id="cancelManualEntryButton", cls="btn btn-sm btn-ghost"), # JS will handle this click to close modal
+                    Button("Save Entry", type="submit", id="saveManualEntryButton", cls="btn btn-sm btn-primary"), # This button submits the HTMX form
+                    cls="flex justify-end gap-2 mt-0" # Removed modal-action, as form submission handles it
                 ),
-                Div(
-                    Label("Status / Severity", For="manualStatus", cls="block text-xs font-medium text-base-content/80 mb-1"),
-                    Select(
-                        Option("Low", value="1"),
-                        Option("Medium", value="2"),
-                        Option("High", value="3"),
-                        id="manualStatus", name="status", cls="select select-bordered select-sm w-full"
-                    ),
-                    cls="mb-3"
-                ),
-                Div(
-                    Label("Summary / Description", For="manualSummary", cls="block text-xs font-medium text-base-content/80 mb-1"),
-                    Textarea(id="manualSummary", name="summary", placeholder="Describe the issue or feeling...", rows="3", cls="textarea textarea-bordered textarea-sm w-full", required=True),
-                    cls="mb-3"
-                ),
-                Div(
-                    Label("Date", For="manualDate", cls="block text-xs font-medium text-base-content/80 mb-1"),
-                    Input(type="date", id="manualDate", name="date", cls="input input-bordered input-sm w-full", required=True),
-                    cls="mb-4"
-                ),
-                Div(
-                    Button("Cancel", type="button", id="cancelManualEntryButton", cls="btn btn-sm btn-ghost"),
-                    Button("Save Entry", type="submit", id="saveManualEntryButton", cls="btn btn-sm btn-primary"),
-                    cls="flex justify-end gap-2 modal-action mt-0"
-                ),
-                id="manualEntryForm"
+                id="manualEntryForm", # ID for JS to hook for modal closing on success etc.
+                hx_post="/htmx/journal_entry_action",
+                hx_target="#journalEntriesList",      # Target where new entry HTML will be placed
+                hx_swap="afterbegin",                # Prepend the new entry
+                # The server response from /htmx/journal_entry_action (for ADD)
+                # will also include OOB swaps for #noJournalEntries and #clearJournalContainer
             ),
             cls="modal-box"
         ),
-        Form(Button("close"), method="dialog", cls="modal-backdrop"),
+        Form(Button("close_backdrop", cls="hidden"), method="dialog", cls="modal-backdrop"), # For closing modal by clicking backdrop
         id="manualEntryModal", cls="modal"
     )
-
+    # --- End of Manual Entry Modal ---
     diary_loading_overlay = Div(
         Span("refresh", id="diaryLoadingIconContainer", cls="material-icons text-emerald-400 mb-6 text-5xl animate-subtle-spin"),
         H2("We are building your health diary...", cls="text-white text-2xl font-semibold mb-3"),
@@ -1478,6 +1755,103 @@ def js_show_narrow_scan_modal_script():
     """
     return Script(js_code)
 
+
+
+
+@rt("/htmx/journal_entry_action")
+async def post_journal_action_handler(req): # Renamed for clarity
+    # This endpoint will be called by HTMX forms or buttons
+    form_data = await req.form()
+    action = form_data.get("wellness_journal_entry_action")
+    entry_id = form_data.get("wellness_journal_entry_id")
+
+    print(f"HTMX Journal Action Received: {action}, ID: {entry_id}, Form: {form_data}") # For debugging
+
+    if action == "REMOVE":
+        # The client-side HTMX swap (outerHTML) on the delete button already removes the element.
+        # This endpoint's job is to confirm and perform any server-side cleanup if needed.
+        # For now, it just acknowledges. If server-side state of entries needs updating, do it here.
+        # We might need to send OOB swaps for the placeholder/clear button if the list becomes empty.
+        # This is now handled by the htmx:afterSwap JS listener as a simpler client-side check.
+        print(f"Server: REMOVE action for entry ID {entry_id} processed.")
+        return "" # Empty response because client-side swap handles DOM.
+
+    elif action == "ADD": # This will be used by the manual entry form
+        new_entry_data = {
+            "wellness_journal_entry_id": str(form_data.get("id", time.time_ns())), # Use form ID or generate
+            "wellness_journal_title": form_data.get("title", "Untitled Entry"),
+            "wellness_journal_current_summary": form_data.get("summary", "No summary provided."),
+            "wellness_journal_severity": int(form_data.get("status", 1)),
+            "wellness_journal_entry_date": datetime.strptime(form_data.get("date"), '%Y-%m-%d').isoformat() if form_data.get("date") else datetime.now().isoformat(),
+            # "wellness_journal_entry_action": "ADD" # Already known
+        }
+        # Here you would save to a database in a real application.
+
+        new_entry_ft = render_single_journal_entry_ft(new_entry_data)
+        # OOB swaps for placeholder and clear button visibility
+        no_entries_div_oob = Div(id="noJournalEntries", style="display: none;", hx_swap_oob="true")
+        clear_button_div_oob = Div(id="clearJournalContainer", style="display: flex;", hx_swap_oob="true")
+
+        # The new_entry_ft is returned to be swapped into the target of the HTMX form submission
+        # (which is #journalEntriesList with swap 'afterbegin').
+        return new_entry_ft, no_entries_div_oob, clear_button_div_oob
+
+    return HtmxResponseHeaders(HX_Reswap="none") # Tell HTMX to do nothing if action not handled
+
+
+
+@rt("/htmx/get_journal_update")
+def get_journal_update_handler(req): # Changed name for clarity
+    global pending_journal_updates # Ensure access to the global list
+    if pending_journal_updates:
+        update_data = pending_journal_updates.pop(0) # Get the oldest update (FIFO)
+        action = update_data.get("wellness_journal_entry_action")
+        entry_id = update_data.get("wellness_journal_entry_id") # Needed for UPDATE/REMOVE
+
+        if action == "ADD":
+            # This will be prepended to #journalEntriesList by the hx-swap="afterbegin"
+            # on the journalUpdateEventHandler div.
+            # The client-side JS will handle showing/hiding the placeholder.
+            return render_single_journal_entry_ft(update_data)
+
+        elif action == "UPDATE":
+            if not entry_id:
+                print("Error: UPDATE action received without wellness_journal_entry_id")
+                return "" # Or an error message
+
+            # Create the updated HTML for the entry
+            updated_entry_html = render_single_journal_entry_ft(update_data)
+            # updated_entry_html is already a Div with id=f"journal-entry-{entry_id}"
+            # Send it as an OOB swap to replace the existing entry.
+            return updated_entry_html.With(**{'hx_swap_oob': 'outerHTML'})
+
+        elif action == "REMOVE":
+            if not entry_id:
+                print("Error: REMOVE action received without wellness_journal_entry_id")
+                return "" # Or an error message
+
+            # Send an empty Div as an OOB swap to remove the element by its ID.
+            # The Div's content will be empty, effectively removing the target.
+            # The client-side JS will handle showing/hiding the placeholder if the list becomes empty.
+            return Div(id=f"journal-entry-{entry_id}", hx_swap_oob="outerHTML")
+
+    return "" # Return an empty string if no updates, HTMX will do nothing.
+
+
+
+@rt("/htmx/clear_journal")
+async def post_clear_journal_handler(req): # Changed name
+    global pending_journal_updates
+    pending_journal_updates = [] # Clear any pending automated updates as well
+
+    # In a real app, you would clear entries from your database here.
+
+    # Return OOB swaps to reset the journal list UI
+    empty_journal_list_oob = Div(id="journalEntriesList", hx_swap_oob="true") # Empty its content
+    no_entries_div_oob = Div(id="noJournalEntries", style="display: flex;", hx_swap_oob="true") # Show placeholder
+    clear_button_div_oob = Div(id="clearJournalContainer", style="display: none;", hx_swap_oob="true") # Hide clear button
+
+    return empty_journal_list_oob, no_entries_div_oob, clear_button_div_oob
 
 
 
