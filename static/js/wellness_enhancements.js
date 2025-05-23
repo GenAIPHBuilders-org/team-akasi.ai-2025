@@ -1,9 +1,9 @@
 // wellness_enhancements.js
 
 // --- SCANNER ANIMATION STATE & DOM ELEMENTS ---
-const SCAN_START_Y_VIEWBOX = 32; 
-const SCAN_END_Y_VIEWBOX = 165;  
-const SCAN_SPEED_UNITS_PER_INTERVAL = 1.0; 
+const SCAN_START_Y_VIEWBOX = 32;
+const SCAN_END_Y_VIEWBOX = 165;
+const SCAN_SPEED_UNITS_PER_INTERVAL = 1.0;
 
 let globalScanLinePosition = SCAN_START_Y_VIEWBOX;
 let globalScanLineDirection = 'down';
@@ -35,7 +35,8 @@ let stagedAttachmentsContainerEl = null;
 let attachImageButtonEl = null;
 let attachDocumentButtonEl = null;
 let chatFormEl = null;
-let chatInputEl = null; 
+// We keep chatInputEl for initial setup, but will rely on event.target within htmx:configRequest
+let chatInputEl = null;
 
 
 // Function to initialize chat-related elements (call this in DOMContentLoaded)
@@ -45,14 +46,13 @@ function initializeChatAttachmentElements() {
     attachImageButtonEl = document.getElementById('attachImageButton');
     attachDocumentButtonEl = document.getElementById('attachDocumentButton');
     chatFormEl = document.getElementById('chatForm'); // Use the ID
-    chatInputEl = document.getElementById('chatInput'); // Get chat input textarea
+    chatInputEl = document.getElementById('chatInput'); // Initial reference
 
     if (attachImageButtonEl && fileInputEl) {
         attachImageButtonEl.addEventListener('click', () => {
             fileInputEl.accept = 'image/*';
             fileInputEl.multiple = true;
             fileInputEl.click();
-            // Close dropdown (DaisyUI specific for dropdown focus)
             if (document.activeElement && document.activeElement instanceof HTMLElement) {
                 document.activeElement.blur();
             }
@@ -73,28 +73,47 @@ function initializeChatAttachmentElements() {
     }
 
     if (chatFormEl) {
-        // IMPORTANT: Override HTMX's FormData construction to include our staged files
+        // IMPORTANT: Override HTMX's FormData construction
         chatFormEl.addEventListener('htmx:configRequest', function(event) {
             const formData = new FormData();
-            // Append chat input text
-            if (chatInputEl) {
-                formData.append('chatInput', chatInputEl.value);
+
+            // *** MODIFICATION START ***
+            // Get the chatInput element directly from the form that triggered the event (event.target).
+            // This ensures we get the *current* input, even after OOB swaps.
+            // The 'name' attribute of the textarea is 'chatInput'.
+            const currentChatInputElement = event.target.elements.chatInput;
+
+            if (currentChatInputElement) {
+                formData.append('chatInput', currentChatInputElement.value);
+            } else {
+                // Fallback or error if chatInput is not found by name.
+                // This might happen if the ID is "chatInput" but the name attribute is different or missing.
+                // However, your Python OOB swap correctly sets name="chatInput".
+                console.warn("chatInput element not found by name in the form during htmx:configRequest. Trying by ID from global scope as fallback.");
+                const currentChatInputById = document.getElementById('chatInput'); // Re-fetch by ID just in case
+                if (currentChatInputById) {
+                     formData.append('chatInput', currentChatInputById.value);
+                } else if (chatInputEl) { // Absolute fallback to the initially captured global
+                    formData.append('chatInput', chatInputEl.value);
+                    console.warn("Fell back to globally scoped chatInputEl. This might send stale data if OOB swaps occurred.");
+                } else {
+                    console.error("Completely unable to find chatInput to append to FormData.");
+                }
             }
+            // *** MODIFICATION END ***
 
             // Append staged files
             let hasFiles = false;
             stagedFilesData.forEach(stagedFile => {
-                formData.append('files', stagedFile.file, stagedFile.file.name); // 'files' is the name server expects
+                // Ensure your server-side code expects files under the name "files"
+                formData.append('files', stagedFile.file, stagedFile.file.name);
                 hasFiles = true;
             });
 
-            event.detail.parameters = formData; // This is how you set the body for HTMX POST/PUT with FormData
+            event.detail.parameters = formData;
 
-            // If files are present, HTMX needs to know it's multipart.
-            // The browser usually sets the Content-Type correctly for FormData (including boundary).
-            // We might need to tell HTMX not to set its default Content-Type.
             if (hasFiles) {
-                 // Let the browser set the Content-Type for FormData
+                // Let the browser set the Content-Type for FormData (multipart/form-data with boundary)
                 delete event.detail.headers['Content-Type'];
             }
         });
@@ -103,10 +122,8 @@ function initializeChatAttachmentElements() {
         chatFormEl.addEventListener('htmx:afterRequest', function(event) {
             if (event.detail.successful) {
                 clearStagedFilesAndInput();
-                if (chatInputEl) { // Also clear the textarea
-                   // chatInputEl.value = ''; // The backend already returns a cleared input via OOB
-                   // autoResizeTextarea(chatInputEl); // Resize if needed
-                }
+                // The textarea itself is cleared by an OOB swap from the server,
+                // so no need to do chatInputEl.value = '' here.
             }
         });
     }
@@ -139,7 +156,7 @@ function handleFileSelection(event) {
         stagedFilesData.push({ id: fileId, file: file, type: displayType });
     }
     renderStagedAttachments();
-    event.target.value = null; // Reset file input to allow selecting the same or more files
+    event.target.value = null; // Reset file input
 }
 
 function renderStagedAttachments() {
@@ -171,14 +188,14 @@ function renderStagedAttachments() {
         name.className = 'truncate text-base-content/90 text-xs';
         name.textContent = stagedFile.file.name;
         name.title = stagedFile.file.name;
-        
+
         const size = document.createElement('span');
-        size.className = 'text-base-content/70 text-xxs'; // Ensure text-xxs is defined or use text-xs
+        size.className = 'text-base-content/70 text-xxs';
         size.textContent = `${(stagedFile.file.size / 1024).toFixed(1)} KB`;
 
         nameAndSizeDiv.appendChild(name);
         nameAndSizeDiv.appendChild(size);
-        
+
         fileInfo.appendChild(icon);
         fileInfo.appendChild(nameAndSizeDiv);
 
@@ -201,37 +218,33 @@ function renderStagedAttachments() {
 function removeStagedFile(fileIdToRemove) {
     stagedFilesData = stagedFilesData.filter(sf => sf.id !== fileIdToRemove);
     renderStagedAttachments();
-    // No need to manipulate fileInputEl.value here as we are using FormData from stagedFilesData
 }
 
 function clearStagedFilesAndInput() {
     stagedFilesData = [];
     if (fileInputEl) {
-        fileInputEl.value = null; // Clear the actual file input as a good measure
+        fileInputEl.value = null;
     }
     if (stagedAttachmentsContainerEl) {
-      renderStagedAttachments(); // This will hide the container if empty
+        renderStagedAttachments();
     }
 }
-
-
 
 function initializeScanAnimationElements() {
     scanLineAnimationGroupRawEl = document.getElementById('scanLineAnimationGroupRaw');
     scanLineAnimationElementRawEl = document.getElementById('scanLineAnimationElementRaw');
     scanLineHighlightAnimationElementRawEl = document.getElementById('scanLineHighlightAnimationElementRaw');
-    
+
     generalScannerStatusTextEl = document.getElementById('scannerStatusText');
     generalScannerStatusIconContainerEl = document.getElementById('scannerStatusIconContainer');
 
     mainAnatomySvgFtEl = document.getElementById('mainAnatomySvgFT');
 
-    // Caching for narrow scan modal elements
     narrowScanModalEl = document.getElementById('narrowScanModal');
     narrowScanInputEl = document.getElementById('narrowScanInput');
     confirmNarrowScanButtonEl = document.getElementById('confirmNarrowScanButton');
     closeNarrowScanModalButtonEl = document.getElementById('closeNarrowScanModalButton');
-    
+
     console.log("Scan animation elements initialized:",
         !!scanLineAnimationGroupRawEl,
         !!generalScannerStatusTextEl,
@@ -239,9 +252,8 @@ function initializeScanAnimationElements() {
         !!narrowScanModalEl
     );
 
-    // Event listeners for modal buttons (manual narrow scan)
     if (confirmNarrowScanButtonEl && narrowScanModalEl && narrowScanInputEl) {
-        confirmNarrowScanButtonEl.addEventListener('click', handleConfirmManualNarrowScan); // Renamed for clarity
+        confirmNarrowScanButtonEl.addEventListener('click', handleConfirmManualNarrowScan);
     }
     if (closeNarrowScanModalButtonEl && narrowScanModalEl) {
         closeNarrowScanModalButtonEl.addEventListener('click', () => {
@@ -255,7 +267,7 @@ function initializeScanAnimationElements() {
             if(narrowScanInputEl) narrowScanInputEl.value = '';
         });
     }
-    
+
     updateScanAnimationVisuals();
 }
 
@@ -267,7 +279,7 @@ function updateScanAnimationVisuals() {
 
     let iconEmoji = '❓';
     generalScannerStatusIconContainerEl.classList.remove('animate-pulse', 'animate-subtle-spin');
-    
+
     if (globalNarrowScannedPartEl && globalNarrowScannedPartEl.classList.contains('ft-narrow-scan-blue-pulsate')) {
         if (scanLineAnimationGroupRawEl) scanLineAnimationGroupRawEl.style.display = 'none';
         if (mainAnatomySvgFtEl.classList.contains('ft-body-outline-pulsating')) {
@@ -299,13 +311,13 @@ function updateScanAnimationVisuals() {
         generalScannerStatusTextEl.textContent = 'Scanner idle.';
         iconEmoji = '💤';
     }
-    
+
     generalScannerStatusIconContainerEl.textContent = iconEmoji;
 }
 
 function startScanLineAnimationInterval() {
     if (globalScanLineAnimationInterval) clearInterval(globalScanLineAnimationInterval);
-    
+
     if (!globalIsLineScanning || globalIsFtBodyOutlinePulsating || globalNarrowScannedPartEl) {
         updateScanAnimationVisuals();
         return;
@@ -346,10 +358,6 @@ function clearAllEffects() {
     }
 }
 
-/**
- * Initiates a narrow scan animation on a specified body part.
- * @param {string} partName - The name of the body part to scan (e.g., "Head", "Lungs").
- */
 function triggerNarrowScanForPart(partName) {
     console.log(`Attempting narrow scan for: ${partName}`);
     if (!mainAnatomySvgFtEl) {
@@ -378,7 +386,7 @@ function triggerNarrowScanForPart(partName) {
         clearAllEffects();
         globalNarrowScannedPartEl = foundPart;
         globalNarrowScannedPartEl.classList.add('ft-narrow-scan-blue-pulsate');
-        
+
         globalIsLineScanning = false;
         stopScanLineAnimationInterval();
 
@@ -387,17 +395,13 @@ function triggerNarrowScanForPart(partName) {
     } else {
         console.warn(`Body part "${partName}" not found for narrow scan.`);
         showToast(`Could not locate part: ${partName}. Try general scan.`, "error");
-        // Optionally, fall back to a general scan or idle state
-        // stopBodyScanAnimation(); // Or some other default state
     }
 }
 
-
-// Renamed original function to avoid confusion with direct narrow scan trigger
 function handleConfirmManualNarrowScan() {
     if (!narrowScanInputEl || !narrowScanModalEl) return;
     const partNameFromInput = narrowScanInputEl.value;
-    triggerNarrowScanForPart(partNameFromInput); // Use the new direct function
+    triggerNarrowScanForPart(partNameFromInput);
     if (typeof narrowScanModalEl.close === 'function') {
         narrowScanModalEl.close();
     }
@@ -410,7 +414,7 @@ function startBodyScanAnimation() {
     globalScanLinePosition = SCAN_START_Y_VIEWBOX;
     globalScanLineDirection = 'down';
     globalIsLineScanning = true;
-    
+
     stopScanLineAnimationInterval();
     startScanLineAnimationInterval();
     updateScanAnimationVisuals();
@@ -420,17 +424,14 @@ function stopBodyScanAnimation() {
     console.log("stopBodyScanAnimation called");
     globalIsLineScanning = false;
     stopScanLineAnimationInterval();
-    // Do not clear globalNarrowScannedPartEl or globalIsFtBodyOutlinePulsating here,
-    // as stop might be called to transition to a narrow scan or glow.
-    // clearAllEffects() should be called explicitly if a full reset is needed.
     updateScanAnimationVisuals();
 }
 
 function toggleBodyGlowEffect() {
     console.log("toggleBodyGlowEffect called (for FT SVG outline pulsate)");
-    
+
     const wasPulsating = globalIsFtBodyOutlinePulsating;
-    clearAllEffects(); // Clear other effects before toggling glow
+    clearAllEffects();
 
     globalIsFtBodyOutlinePulsating = !wasPulsating;
 
@@ -448,15 +449,9 @@ function toggleBodyGlowEffect() {
     updateScanAnimationVisuals();
 }
 
-/**
- * Central command executor for body scanner animations.
- * @param {string} command - The command to execute (e.g., "START_SCAN", "STOP_SCAN", "FULL_BODY_GLOW", or a specific body part name).
- */
 function executeBodyScannerCommand(command) {
     console.log(`Executing body scanner command: ${command}`);
     if (!command || command.trim() === "" || command.toLowerCase() === "idle") {
-        // Optionally, set to idle or do nothing if command is "idle"
-        // stopBodyScanAnimation(); // Example: go to idle
         console.log("Scanner command is idle or empty, no action taken.");
         return;
     }
@@ -469,27 +464,22 @@ function executeBodyScannerCommand(command) {
             break;
         case "STOP_SCAN":
             stopBodyScanAnimation();
-            // Note: STOP_SCAN usually means go to idle. If an LLM says "stop scan" then "scan head",
-            // the "scan head" command will override.
             break;
         case "FULL_BODY_GLOW":
             toggleBodyGlowEffect();
             break;
         default:
-            // Assuming any other non-empty command is a body part name for narrow scan
             triggerNarrowScanForPart(command);
             break;
     }
 }
 
-
-// Basic Toast Function (if not already globally available)
 if (typeof showToast === 'undefined') {
     function showToast(message, type = 'info') {
         const toastContainer = document.getElementById('toastContainer');
         if (!toastContainer) {
             console.error("Toast container not found. Cannot display toast:", message);
-            alert(message);
+            alert(message); // Fallback if toast container is missing
             return;
         }
         const toastId = `toast-js-${Date.now()}`;
@@ -504,7 +494,7 @@ if (typeof showToast === 'undefined') {
             </div>
         `;
         toastContainer.insertAdjacentHTML('beforeend', toastHTML);
-        
+
         setTimeout(() => {
             const toastElement = document.getElementById(toastId);
             if(toastElement) {
@@ -524,52 +514,38 @@ if (typeof showToast === 'undefined') {
     }
 }
 
-
-// --- CHAT AUTO-SCROLLING LOGIC (REVISED) ---
 function scrollChatToEnd() {
     const messagesContainer = document.getElementById('messagesArea');
     if (messagesContainer) {
-        // Using a very short timeout defers the scroll operation until after the
-        // current JavaScript execution stack has cleared and the browser has had a chance
-        // to process DOM changes and reflows. This often helps get the correct scrollHeight.
         setTimeout(() => {
             messagesContainer.scrollTop = messagesContainer.scrollHeight;
-        }, 20); // 0ms is often enough, but you can try 50ms or 100ms if issues persist
+        }, 20);
     }
 }
 
 document.body.addEventListener('htmx:afterSwap', function(event) {
     const messagesArea = document.getElementById('messagesArea');
-
     if (messagesArea) {
         let shouldScroll = false;
-
-        // Case 1: The direct target of the swap is the messagesArea itself
-        // (This happens when user_chat_bubble and typing_loader_trigger are appended)
-        if (event.detail.target === messagesArea) {
+        if (event.detail.target === messagesArea || (event.detail.elt && messagesArea.contains(event.detail.elt))) {
             shouldScroll = true;
         }
-        // Case 2: An element *inside* messagesArea was swapped/replaced
-        // (This happens when typing_loader_trigger is replaced by typing_indicator_bubble,
-        // and then typing_indicator_bubble is replaced by the ai_chat_bubble_component)
-        else if (event.detail.elt && messagesArea.contains(event.detail.elt)) {
-            shouldScroll = true;
-        }
-
         if (shouldScroll) {
             scrollChatToEnd();
         }
     }
 });
 
-
 document.addEventListener('DOMContentLoaded', () => {
     initializeScanAnimationElements();
-    startBodyScanAnimation(); // Auto-start removed, will be command-driven
+    // Delay the start of the body scan animation by 2 seconds
+    setTimeout(() => {
+        startBodyScanAnimation();
+    }, 4000); // 2000 milliseconds = 2 seconds
     updateScanAnimationVisuals(); // Ensure initial idle state is shown
-    initializeChatAttachmentElements(); // Call the new initializer
+    initializeChatAttachmentElements();
 });
 
 
 
-console.log("wellness_enhancements.js loaded (v2.8 - command executor).");
+console.log("wellness_enhancements.js loaded (v2.9 - chatInput fix).");

@@ -10,13 +10,30 @@ from pathlib import Path
 import json
 from services.sb_user_services import fetch_user_profile # Assuming this path is correct relative to your project structure
 from fasthtml.core import RedirectResponse
-import asyncio
 import re
 import asyncio
 import time
 import urllib.parse
 from starlette.datastructures import UploadFile
 import base64
+from langchain.chat_models import init_chat_model
+from typing import Annotated
+from typing_extensions import TypedDict
+from langgraph.graph import StateGraph, START, END
+from langgraph.graph.message import add_messages
+from langgraph.graph import MessagesState
+from langchain_core.tools import tool
+from langchain_core.messages import (
+    BaseMessage,
+    HumanMessage,
+    AIMessage,
+    ToolMessage,
+    SystemMessage,
+)
+from typing import Annotated, Literal
+from langgraph.checkpoint.memory import MemorySaver
+
+
 
 
 # --- Configuration ---
@@ -26,6 +43,9 @@ load_dotenv(os.path.join(BASE_DIR, '.env'))
 supabase_url = os.getenv("SUPABASE_URL_NEW")
 supabase_anon_key = os.getenv("SUPABASE_ANON_KEY_NEW")
 supabase: Client = create_client(supabase_url, supabase_anon_key)
+
+
+
 
 def use_auth_context(access_token, refresh_token=None):
     """Set authentication context on the global client for the current request"""
@@ -69,6 +89,9 @@ app, rt = fast_app(
 
 
 
+
+
+
 # --- Routes ---
 
 
@@ -103,7 +126,6 @@ scan_line_group_raw_string = """
 
 # --- Main Body SVG FT Component ---
 # This function will create the main annotated SVG body using FastHTML components
-
 def create_main_anatomy_svg():
     # Define default styles for clarity and to ensure they are applied
     default_body_fill = "#97979795"  # Light grey for external parts
@@ -204,7 +226,7 @@ pre_configured_conversation_history = [
 
 # Body scanner action commands list
 body_scanner_action_commands_list = [
-    "START_SCAN", "STOP_SCAN", "Head", "Neck", "Thorax", "Lungs", "Heart",
+    "START_SCAN", "STOP_SCAN", "Head", "Neck", "Thorax", "Lungs", "Heart", "idle"
     "Abdominal and Pelvic Region", "Left Shoulder", "Right Shoulder",
     "Left Arm", "Right Arm", "Left Hand", "Right Hand", "Left Leg",
     "Right Leg", "Left Foot", "Right Foot", "FULL_BODY_GLOW"
@@ -245,9 +267,360 @@ async def process_files_to_base64_list(files: list[UploadFile]) -> list[dict]:
     return processed_attachments
 
 
+# --- BUILDING THE LLM AGENT 1 --- 
+# Create an AI agent that has image tool that inteprets the message gets the data then gives it to the agent
+# Then add a workflow to the agent so that you can control the body scanner
 
 
 
+llm = init_chat_model(
+    "us.anthropic.claude-3-7-sonnet-20250219-v1:0",
+    model_provider="bedrock_converse",
+    region_name='us-west-2',
+    temperature = 0.1,
+)
+
+
+class MedicalAgentState(TypedDict):
+    messages: Annotated[List[BaseMessage], add_messages]
+    input_base64_images: Optional[List[dict]]
+    body_scanner_command: str | None
+
+
+graph_builder = StateGraph(MedicalAgentState)
+
+memory = MemorySaver()
+
+# Tool definition
+@tool
+def summarize_medical_images_tool_interface(images: List[dict]) -> str:
+    """
+    Analyzes and summarizes a list of provided medical images (e.g., X-rays, MRIs)
+    by making an internal LLM call.
+    This tool is invoked by the system when images are available in the current context
+    and a summary is requested. The list of base64 encoded images is provided as an argument.
+    """
+    if not images:
+        return "Error: No images were provided to summarize."
+    
+
+    # 1. Construct the multimodal message content parts for the internal LLM call
+    message_content_parts = []
+    for image_detail_dict in images:
+        b64_image_data = image_detail_dict.get("data")
+        media_type = image_detail_dict.get("media_type", "image/jpeg") 
+
+        if not b64_image_data:
+            print("Warning: An image item was missing base64 data in summarize_medical_images_tool_interface.")
+            continue
+
+        message_content_parts.append({
+            "type": "image",
+            "source": {
+                "type": "base64",
+                "media_type": media_type, 
+                "data": b64_image_data,
+            },
+        })
+    
+
+    if not message_content_parts:
+        return "Error: No valid image data found to summarize after processing input."
+
+
+
+    
+    summarization_prompt_text = (
+        "Based on the following medical image(s), provide a concise summary or medical report. "
+        "Focus on observable features and avoid making diagnoses if not explicitly qualified to do so."
+    )
+
+    message_content_parts.append({"type": "text", "text": summarization_prompt_text})
+
+    
+
+    # 2. Create the System and Human messages for the LLM call
+    summarization_system_prompt = SystemMessage(
+        content=(
+            "You are an expert medical image analyst. Your task is to provide a concise summary "
+            "or medical report based on the provided image(s) and the user's request "
+            "as conveyed in the text part of the message."
+        )
+    )
+    summarization_human_message = HumanMessage(content=message_content_parts)
+
+    try:
+        print(f"Tool invoking LLM for summarization with {len(message_content_parts) -1} image(s).")
+        response = llm.invoke([summarization_system_prompt, summarization_human_message])
+        
+        if isinstance(response, AIMessage) and response.content:
+            print(f"Tool's LLM summarization successful. Summary: {response.content[:100]}...")
+            return response.content
+        else:
+            print(f"Tool's LLM summarization did not return expected AIMessage. Response: {response}")
+            return "Error: Could not generate a summary from the LLM within the tool."
+            
+    except Exception as e:
+        print(f"Error during LLM-based image summarization within tool: {e}")
+        return f"Error summarizing images within tool: {str(e)}"
+
+
+tools = [summarize_medical_images_tool_interface]
+tools_by_name = {tool.name: tool for tool in tools}
+llm_with_tools = llm.bind_tools(tools)
+
+
+# --- Agent State Definition ---
+
+
+
+# --- Node Functions ---
+def decide_action_node(state: MedicalAgentState):
+    """
+    The LLM decides whether to respond directly or call a tool.
+    """
+    print("\n--- Entered decide_action_node ---")
+    
+    akasi_system_message = SystemMessage(
+        content=(
+            "You are Akasi.ai, a friendly and empathetic AI. Your **sole and overriding objective** is to gather as much comprehensive health information as possible from the user to meticulously build their personal wellness journal. "
+            "You achieve this by **always asking relevant follow-up questions** in a natural, supportive, and conversational manner. "
+            "Your interaction style should make the user feel comfortable sharing."
+
+            "\n\n**Critical Operating Principles:**\n"
+            "1. **Constant Information Gathering:** Every interaction is an opportunity to gather more details for the wellness journal. Your goal is to be thorough.\n"
+            "2. **Mandatory Follow-Up Questions:** After any statement you make, or after the user provides information, you MUST ask a relevant follow-up question. Your responses should typically be concise (1-2 sentences) leading into this next question. There are no dead-ends; always seek more depth or breadth of information.\n"
+            "3. **Strictly No Assistance, Only Inquiry:** You are NOT here to provide advice, medical opinions, diagnoses, interpretations, summaries (beyond the specific tool usage below), or any form of assistance. Your ONLY function is to ask questions to elicit information for the journal. If the user asks for assistance, gently redirect by asking a related question to gather more information about their concern instead (e.g., 'I understand you're looking for X, to help build your journal, could you tell me more about what led to this concern?').\n\n"
+
+            "Guide the conversation to understand their current health concerns, symptoms, medical history, and any relevant lifestyle factors. "
+
+            "\n\n**Handling Medical Image Summaries (Information Extraction Only):**\n"
+            "When medical images are provided by the user AND their query seems related to these images: \n"
+            "1. Use the 'summarize_medical_images_tool_interface' to obtain its output. \n"
+            "2. Your SOLE purpose with this output is to use it to generate MORE targeted follow-up questions for the user to expand on their journal. \n"
+            "   - You are NOT to interpret or explain the summary. \n"
+            "   - Briefly (1 sentence, if absolutely necessary for context) mention a point from the summary *only* to frame your next question. For example: 'The tool output mentioned [brief point from summary]; could you share more about how this relates to your symptoms or experiences for your journal?' or 'Regarding [another brief point], when did you first notice this or discuss it with a professional?'\n"
+            "   - Your primary action here is to ask these direct, clarifying, or qualifying questions based on the tool's output to gather further information from the user. \n"
+            "   - Always gently remind the user that any tool output is for informational purposes to help them add to their journal, and all medical matters should be discussed with their healthcare professional. \n\n"
+
+            "If no images are provided, or if the user's query is unrelated to any provided images, continue your relentless but friendly information gathering through follow-up questions to build their wellness journal, adhering to the Critical Operating Principles. "
+            "Remember, your singular goal is to populate the user's wellness journal with comprehensive information obtained through empathetic and persistent questioning."
+        )
+    )
+            
+    messages_for_llm_invocation = [akasi_system_message] + state["messages"]
+    
+    print(f"Messages for LLM call in decide_action_node (first is Akasi persona): {[m.type for m in messages_for_llm_invocation]}")
+    
+    # Invoke the LLM with the Akasi persona and the rest of the conversation history
+    response = llm_with_tools.invoke(messages_for_llm_invocation)
+    
+    print(f"LLM response type: {response.type}, Tool calls: {getattr(response, 'tool_calls', 'N/A')}")
+    # The response (AIMessage) will be added to the state's message list by LangGraph's `add_messages`
+    return {"messages": [response]}
+
+
+def execute_tool_node(state: MedicalAgentState):
+    """
+    Executes the tool called by the LLM.
+    """
+    print("\n--- Entered execute_tool_node ---")
+    tool_messages: List[ToolMessage] = []
+    last_message = state["messages"][-1]
+
+    if not isinstance(last_message, AIMessage) or not last_message.tool_calls:
+        print("No tool calls found in the last AI message.")
+        return {} 
+
+    for tool_call in last_message.tool_calls:
+        tool_name = tool_call["name"]
+        invoked_tool = tools_by_name.get(tool_name)
+
+        print(f"Attempting to execute tool: {tool_name}")
+
+        if not invoked_tool:
+            observation = f"Error: Unknown tool '{tool_name}' called."
+        elif tool_name == "summarize_medical_images_tool_interface":
+            # This will be a List[dict] as per MedicalAgentState
+            images_data_list_from_state = state.get("input_base64_images") 
+            if images_data_list_from_state:
+
+                tool_args_for_invoke = {"images": images_data_list_from_state}
+                try:
+                    print(f"Invoking '{tool_name}' with {len(images_data_list_from_state)} image items from state.")
+                    observation = invoked_tool.invoke(tool_args_for_invoke)
+                except Exception as e:
+                    observation = f"Error invoking {tool_name}: {str(e)}"
+                    print(f"Exception during tool invocation: {e}")
+            else:
+                observation = "Error: Tool 'summarize_medical_images_tool_interface' called, but no image data was found in the state."
+        else:
+            try:
+                print(f"Invoking generic tool '{tool_name}' with args: {tool_call.get('args', {})}")
+                observation = invoked_tool.invoke(tool_call.get("args", {}))
+            except Exception as e:
+                observation = f"Error invoking {tool_name}: {str(e)}"
+                print(f"Exception during generic tool invocation: {e}")
+        
+        tool_messages.append(
+            ToolMessage(content=str(observation), tool_call_id=tool_call["id"], name=tool_name)
+        )
+    print(f"Tool observation(s): {[tm.content[:100] + '...' if tm.content else 'N/A' for tm in tool_messages]}")
+    return {"messages": tool_messages}
+
+# --- Conditional Edge Logic ---
+def should_call_tool(state: MedicalAgentState) -> Literal["execute_tool_node", "__end__"]:
+    """
+    Determines the next step based on whether the LLM decided to call a tool.
+    """
+    print("\n--- Entered should_call_tool ---")
+    last_message = state["messages"][-1]
+    if isinstance(last_message, AIMessage) and last_message.tool_calls:
+        print("Routing to execute_tool_node")
+        return "execute_tool_node"
+    print("Routing to END (or final response generation)")
+    return END
+
+
+# --- Graph Construction ---
+graph_builder = StateGraph(MedicalAgentState)
+
+graph_builder.add_node("decide_action_node", decide_action_node)
+graph_builder.add_node("execute_tool_node", execute_tool_node)
+
+graph_builder.set_entry_point("decide_action_node")
+
+graph_builder.add_conditional_edges(
+    "decide_action_node",
+    should_call_tool,
+    {
+        "execute_tool_node": "execute_tool_node",
+        END: END,
+    },
+)
+
+graph_builder.add_edge("execute_tool_node", "decide_action_node")
+
+graph_1 = graph_builder.compile(checkpointer=memory)
+
+
+# --- Workflow 1 : BODY SCANNER COMMANDER ------- 
+# Create an AI agent that has image tool that inteprets the message gets the data then gives it to the agent
+# Then add a workflow to the agent so that you can control the body scanner
+from pydantic import BaseModel, Field
+
+graph_builder_2 = StateGraph(MedicalAgentState)
+
+class BodyScannerCommand(BaseModel):
+    """
+    Represents the command to be sent to the body scanner animation system
+    based on the ongoing conversation with the patient.
+    """
+    body_scanner_command: Literal["START_SCAN", "STOP_SCAN", "Head", "Neck", "Thorax", "Lungs", "Heart", "idle", "Abdominal and Pelvic Region", "Left Shoulder", "Right Shoulder", "Left Arm", "Right Arm", "Left Hand", "Right Hand", "Left Leg", "Right Leg", "Left Foot", "Right Foot", "FULL_BODY_GLOW"] = Field(
+        ...,
+        description="The chosen command for the body scanner animation. Must be one of the predefined commands."
+    )
+
+
+
+
+def body_scanner_commands(state: MedicalAgentState):
+    print("\n--- Entered body_scanner_commands_node ---")
+    conversation_history = state["messages"]
+    if not conversation_history:
+        print("Warning: No conversation history found for body scanner command generation.")
+        return {"body_scanner_command": "idle"} # Default command
+
+    # Ensure the LLM used here supports ainvoke and structured output
+    body_scanner_commander_llm = llm.with_structured_output(BodyScannerCommand)
+    
+    system_prompt_content = """You are an expert system that analyzes a patient's conversation with an AI health assistant (Akasi) to 
+    determine the appropriate command for a virtual body scanner animation. Your goal is to select a command that best 
+    reflects the current focus of the conversation regarding the patient's health.
+    It is imperative that you select a command exclusively from this list and meticulously follow the guidelines 
+    provided below when making your decision. Output only the selected command.
+    **Guidelines for choosing the command:**
+    * **"START_SCAN"**: If the conversation indicates the beginning of a new health discussion, Akasi is initiating a general inquiry, or the user expresses readiness to begin.
+    * **"STOP_SCAN"**: If the conversation suggests the patient wants to end the discussion, Akasi is concluding, or the information gathering for a phase seems complete.
+    * **"idle"**: If the conversation is general, not focused on specific physical symptoms or body parts, Akasi is transitioning, or no specific body part is clearly indicated by the *latest* parts of the conversation. Use this if the discussion is more about feelings, general state, or if Akasi has just asked a broad opening question.
+    * **"Head", "Neck", "Lungs", "Heart", "Left Shoulder", "Right Shoulder", "Left Arm", "Right Arm", "Left Hand", "Right Hand", "Left Leg", "Right Leg", "Left Foot", "Right Foot"**: Choose the command corresponding to the most relevant body part if the conversation *explicitly* mentions symptoms, pain, injury, or discussion related to that specific area. Prioritize the most recently discussed body part.
+    * **"Thorax"**: If the conversation refers to the chest area generally, ribs, or upper torso, but not specifically lungs or heart if those are more precise.
+    * **"Abdominal and Pelvic Region"**: If the conversation mentions symptoms or organs in the abdomen (e.g., stomach, intestines, liver, kidneys, digestion) or pelvic area (e.g., bladder, reproductive organs).
+    * **"FULL_BODY_GLOW"**: If the conversation discusses systemic issues (e.g., overall fatigue, widespread pain, fever, issues related to blood, hormones, immune system, skeletal system as a whole, general wellness checks, or if Akasi is making a broad summary or asking about overall feeling after discussing specifics).
+    Analyze the **entire flow and current focus** of the conversation. The command should reflect what body part or action is most relevant to Akasi's information gathering at the **current stage** of the dialogue. Pay close attention to the user's latest messages and Akasi's most recent questions.
+    """
+
+    # Prepare messages for the commander LLM
+    # The Bedrock Claude messages API expects a list of message dicts,
+    # or LangChain BaseMessage objects.
+    messages_for_commander_llm: List[BaseMessage] = [
+        SystemMessage(content=system_prompt_content)
+    ]
+    # Append existing history (which are already BaseMessage objects)
+    messages_for_commander_llm.extend(conversation_history)
+    messages_for_commander_llm.append(
+         HumanMessage(content="Based on the full conversation history provided, what is the single most appropriate body scanner command?")
+    )
+    
+    try:
+        # result is expected to be an instance of BodyScannerCommand (Pydantic model)
+        result = body_scanner_commander_llm.invoke(messages_for_commander_llm)
+        print(f"Body scanner commander LLM result: {result.body_scanner_command if result else 'None'}")
+        command_to_set = result.body_scanner_command if result and hasattr(result, 'body_scanner_command') else "idle"
+        return {"body_scanner_command": command_to_set}
+    except Exception as e:
+        print(f"Error in body_scanner_commander_llm.ainvoke: {e}")
+        return {"body_scanner_command": "idle"} # Default on error
+
+
+graph_builder_2.add_node("llm_body_ui_commander", body_scanner_commands)
+graph_builder_2.add_edge(START, "llm_body_ui_commander")
+graph_workflow_1 = graph_builder_2.compile()
+
+
+
+# --- Workflow 1 : BODY SCANNER COMMANDER ------- 
+
+
+
+
+
+
+# --- Workflow 2 : JOURNAL ENTRY CONTROLLER  START ------- 
+
+
+
+async def process_wellness_journal_data(conversation_messages: List[BaseMessage]):
+    """
+    Simulates processing of conversation history for a wellness journal entry.
+    Prints a preconfigured output after a delay.
+    """
+    print("--- Wellness Journal Processor: Starting (simulated 10s delay) ---")
+    await asyncio.sleep(10)  # Simulate processing time
+    
+    # Preconfigured output
+    # Note: Corrected the wellness_journal_title and summary concatenation
+    journal_output = {
+        "wellness_journal_entry_id": "1",
+        "wellness_journal_title": "Chest Pain Episode",
+        "wellness_journal_current_summary": "Pain is sharp, 7/10, radiates to left arm...",
+        "wellness_journal_entry_action": "ADD", # Can be "ADD", "REMOVE", "UPDATE"
+        "wellness_journal_entry_date": datetime.now().isoformat() 
+    }
+    
+    print(f"--- Wellness Journal Processor: Completed ---")
+    print(f"Wellness Journal Input Messages Count: {len(conversation_messages)}") # To verify input
+    print(f"Wellness Journal Output: {journal_output}")
+    # In a future step, this function could trigger an HTMX OOB swap 
+    # or send data via WebSockets/SSE to the client for a new animation.
+    # For now, it just prints to the server console.
+    return journal_output 
+
+
+
+
+
+# --- Workflow 2 : JOURNAL ENTRY CONTROLLER  END ------- 
 
 
 
@@ -255,62 +628,116 @@ async def process_files_to_base64_list(files: list[UploadFile]) -> list[dict]:
 
 async def llm_agent_1(user_message: str, attachments_data: list[dict] = None):
     """
-    Simulates an LLM agent processing the user message.
-    Returns a structured response after a delay.
+    Processes the user message and optional image attachments,
+    invokes the LangGraph agent, and returns the final response.
+    'attachments_data' is expected to be a list of dictionaries, where each dict has:
+    {"filename": "...", "content_type": "image/png", "base64": "..."}
     """
-
     print(f"\n--- Entered llm_agent_1 ---")
-    print(f"llm_agent_1 received user_message: {user_message}")
-
-    # --- Print attachment details if present ---
+    print(f"User Message: {user_message}")
     if attachments_data:
-        print(f"llm_agent_1 received {len(attachments_data)} attachments:")
-        for idx, att_data in enumerate(attachments_data):
-            print(f"  Attachment #{idx + 1}:")
-            if "error" in att_data:
-                print(f"    Filename: {att_data.get('filename', 'N/A')}")
-                print(f"    Error during previous processing: {att_data['error']}")
-            else:
-                print(f"    Filename: {att_data.get('filename', 'N/A')}")
-                print(f"    Content-Type: {att_data.get('content_type', 'N/A')}")
-                print(f"    Size: {att_data.get('size', 0)} bytes (approx. from Base64 length)")
-                base64_snippet = att_data.get('base64', '')[:80]  # Snippet
-                print(f"    Base64 Snippet (first 80 chars): {base64_snippet}...")
-    else:
-        print("llm_agent_1 received no attachments.")
-    # --- End of attachment printing ---
+        print(f"Number of attachments: {len(attachments_data)}")
+
+    message_content_parts = [{"type": "text", "text": user_message}]
+    # This list will store dicts: {"data": base64_string, "media_type": "image_type"}
+    # This is what the 'input_base64_images' field in the state will hold.
+    image_details_for_state_and_tool: List[dict] = [] 
+
+    if attachments_data:
+        for att_data in attachments_data:
+            # Directly access keys based on the expected structure of att_data
+            b64_string = att_data.get("base64")
+            # 'content_type' from att_data is the media_type
+            media_type = att_data.get("content_type", "image/jpeg") # Default if 'content_type' is missing
+
+            if b64_string: # Ensure there's actual base64 data
+                # Part 1: For the HumanMessage content list (sent to the main agent LLM)
+                message_content_parts.append({
+                    "type": "image",
+                    "source": {"type": "base64", "media_type": media_type, "data": b64_string}
+                })
+                
+                # Part 2: For the 'input_base64_images' field in the agent state,
+                # which will be passed as an argument to the summarization tool.
+                image_details_for_state_and_tool.append({"data": b64_string, "media_type": media_type})
+    
+    # The initial_messages list will now only contain the HumanMessage.
+    # The SystemMessage for Akasi.ai persona is handled within the decide_action_node.
+    config = {"configurable": {"thread_id": "1"}}
+    initial_messages: List[BaseMessage] = [
+        HumanMessage(content=message_content_parts)
+    ]
+    
+    initial_graph_state = {
+        "messages": initial_messages,
+        "input_base64_images": image_details_for_state_and_tool if image_details_for_state_and_tool else None,
+    }
+
+    print(f"\nInitial graph state being sent to agent:")
+    print(f"  Input Base64 Images provided: {bool(initial_graph_state['input_base64_images'])}")
+    if initial_graph_state['input_base64_images']:
+        print(f"  Number of image details for tool: {len(initial_graph_state['input_base64_images'])}")
+
+    for i, msg in enumerate(initial_graph_state["messages"]):
+        print(f"  Message {i} Type: {msg.type}")
+        if isinstance(msg.content, list):
+            for part_idx, part in enumerate(msg.content):
+                if part["type"] == "text":
+                    print(f"    Part {part_idx} (text): {part['text'][:50]}...")
+                elif part["type"] == "image":
+                    print(f"    Part {part_idx} (image): media_type={part['source']['media_type']}, data_len={len(part['source']['data'])}")
+        else:
+            print(f"    Content: {str(msg.content)[:70]}...")
+
+    final_state = graph_1.invoke(initial_graph_state, config)
+
+    final_ai_response_content = "No response generated."
+    if final_state and "messages" in final_state and final_state["messages"]:
+        last_message_obj = final_state["messages"][-1]
+        if isinstance(last_message_obj, AIMessage):
+            final_ai_response_content = last_message_obj.content
+        elif isinstance(last_message_obj, ToolMessage) and len(final_state["messages"]) > 1:
+            potential_ai_message = final_state["messages"][-2]
+            if isinstance(potential_ai_message, AIMessage):
+                 final_ai_response_content = potential_ai_message.content
+        else:
+            final_ai_response_content = str(last_message_obj.content)
+
+    print(f"\nFinal AI Response from invoke: {final_ai_response_content}")
 
 
-    await asyncio.sleep(2) # Simulate 1-second delay
+    # print("------------------ PRINTING FINAL STATE MESSAGES-----------------------")
+    # print(final_state["messages"])
+    # print("------------------ PRINTING FINAL STATE MESSAGES-----------------------")
 
-    found_command = "idle" # Default command
-    normalized_user_message = user_message.lower()
+    ai_response = final_ai_response_content
+    print("------------------ body scanner command start -----------------------")    
 
-    # More specific commands first
-    if "start scan" in normalized_user_message:
-        found_command = "START_SCAN"
-    elif "stop scan" in normalized_user_message:
-        found_command = "STOP_SCAN"
-    elif "full body glow" in normalized_user_message or "glow" in normalized_user_message:
-        found_command = "FULL_BODY_GLOW"
-    else:
-        # Check for body part names
-        for command_keyword in body_scanner_action_commands_list:
-            # Ensure keywords like "Heart" or "Lungs" are specifically matched if they are also general animation commands
-            if command_keyword not in ["START_SCAN", "STOP_SCAN", "FULL_BODY_GLOW"]:
-                 # Use word boundaries for more precise matching of body parts
-                if re.search(r'\b' + re.escape(command_keyword.lower()) + r'\b', normalized_user_message):
-                    found_command = command_keyword # Keep original casing for JS
-                    break
+
+    workflow_input_state = {
+        "messages": final_state.get("messages", []), 
+        "input_base64_images": None,
+        "body_scanner_command": None 
+    }    
+
+    body_scan_command_wf = graph_workflow_1.invoke(workflow_input_state)
+
+
+    asyncio.create_task(process_wellness_journal_data(workflow_input_state["messages"]))
+    print("--- Wellness Journal Processor: Task scheduled (will run in background) ---")
+
+
+
     
     response_data = {
-        "ai_response": f"Simulated AI response to: '{user_message}'. Action: {found_command}", # Dynamic AI response
-        "body_scanner_animation_action_comand": found_command,
+        "ai_response": f"{ai_response}", # Dynamic AI response
+        "body_scanner_animation_action_comand": body_scan_command_wf["body_scanner_command"],
         "trigger_wellness_journal_data_listener": "START", # This can be made dynamic too
-        "output_conversation_history": pre_configured_conversation_history # Using the predefined list
+        "output_conversation_history": "EMPTY" # Using the predefined list
     }
-    print(f"llm_agent_1 output: {response_data}")
+
     return response_data
+
 
 
 
@@ -344,20 +771,26 @@ def unified_ui_controller_for_chat_window_and_body_scanner(llm_data: dict, user_
     )
 
 
-    print(f"Unified UI Controller - Body Scanner Command: {llm_data.get('body_scanner_animation_action_comand')}")
-    print(f"Unified UI Controller - Wellness Journal Trigger: {llm_data.get('trigger_wellness_journal_data_listener')}")
-    print(f"Unified UI Controller - Conversation History: {llm_data.get('output_conversation_history')}")
+    # print(f"Unified UI Controller - Body Scanner Command: {llm_data.get('body_scanner_animation_action_comand')}")
+    # print(f"Unified UI Controller - Wellness Journal Trigger: {llm_data.get('trigger_wellness_journal_data_listener')}")
+    # print(f"Unified UI Controller - Conversation History: {llm_data.get('output_conversation_history')}")
 
     return ai_chat_bubble
 
 
 
-
-
 @rt("/send_chat_message")
 async def handle_send_chat_message(req, sess):
+    print("================== send_chat_message route  - PRINTING FORM DATA =======================")
     form_data = await req.form()
-    user_message_text = form_data.get("chatInput", "").strip()
+    print(form_data)
+    user_message_text = form_data.get("chatInput", "")
+
+    print("================== send_chat_message route - PRINTING  user_message_text=======================")
+
+    print(user_message_text)
+
+
     uploaded_file_objects: list[UploadFile] = form_data.getlist("files")
 
     attachment_uuids_for_next_step = []
@@ -446,6 +879,13 @@ async def handle_send_chat_message(req, sess):
     )
 
     user_message_text_encoded = urllib.parse.quote(user_message_text)
+
+ 
+    print("================== send_chat_message route - PRINTING   user_message_text_encoded=======================")
+
+    print(user_message_text)
+   
+
     
     # Construct attachment_uuids_param
     attachment_uuids_str = ",".join(attachment_uuids_for_next_step)
@@ -461,17 +901,24 @@ async def handle_send_chat_message(req, sess):
     # This OOB swap clears the textarea.
     cleared_chat_input = Textarea(id="chatInput", name="chatInput", placeholder="Describe your symptoms here...", cls="textarea textarea-bordered flex-grow resize-none scrollbar-thin", rows="1", style="min-height: 44px; max-height: 120px;", hx_swap_oob="true")
  
+
+
     return user_chat_bubble, typing_loader_trigger, cleared_chat_input
 
 
 @rt("/load_typing_indicator")
 async def load_typing_indicator_handler(req):
-    user_message_text_encoded = req.query_params.get("user_message", "")
+    user_message_from_query = req.query_params.get("user_message", "")
     attachment_uuids = req.query_params.get("attachment_uuids", "") # Get the UUIDs string
     ai_bubble_target_id = f"ai-bubble-{time.time_ns()}"
 
+    print("================== load_typing_indicator   - PRINTING user_message_from_query  =======================")
+
+    print(user_message_from_query)        
+
     attachment_uuids_param = f"&attachment_uuids={attachment_uuids}" if attachment_uuids else ""
 
+    user_message_text_encoded = urllib.parse.quote(user_message_from_query)
 
     typing_indicator_bubble = Div(
         Div(
@@ -491,24 +938,35 @@ async def load_typing_indicator_handler(req):
         hx_trigger="load delay:50ms", 
         hx_swap="outerHTML"
     )
+
+
     return typing_indicator_bubble
 
 
 
 @rt("/get_ai_actual_response")
 async def get_ai_actual_response(req, sess):
-    user_message_text_encoded = req.query_params.get("user_message", "")
+    get_user_message = req.query_params.get("user_message", "")
     target_id = req.query_params.get("target_id", "") 
     attachment_uuids_str = req.query_params.get("attachment_uuids", "") # Get the UUIDs string
 
-    user_message_text = urllib.parse.unquote(user_message_text_encoded)
+    user_message_text = urllib.parse.unquote(get_user_message)
     
+    print("================== /get_ai_actual_response - PRINTING get_user_message =======================")
+
+    print(get_user_message)      
+
+    print("================== /get_ai_actual_response - PRINTING  user_message_text =======================")
+
+    print( user_message_text)      
+
+
+
     retrieved_attachments_from_supabase = [] # Renamed for clarity
     list_of_uuids_to_delete = [] # Keep track of UUIDs to delete later
 
     if attachment_uuids_str:
         list_of_uuids = [uid.strip() for uid in attachment_uuids_str.split(',') if uid.strip()]
-        list_of_uuids_to_delete = list_of_uuids # Store for deletion
         if list_of_uuids:
             print(f"Attempting to retrieve attachments from Supabase for UUIDs: {list_of_uuids}")
             try:
@@ -523,7 +981,7 @@ async def get_ai_actual_response(req, sess):
                             "filename": f"attachment_{row['id']}.{row['file_type'].split('/')[-1] if row.get('file_type') else 'bin'}",
                             "content_type": row.get('file_type'),
                             "base64": row.get('base64_string'),
-                            "size": len(row.get('base64_string', ''))
+
                         })
                 else:
                     print(f"No data returned from Supabase for UUIDs: {list_of_uuids}. Response: {response}")
@@ -545,11 +1003,17 @@ async def get_ai_actual_response(req, sess):
 
     llm_output = await llm_agent_1(user_message_text, attachments_data=retrieved_attachments_from_supabase) 
 
+    print("-------- IM IN THE  /get_ai_actual_response  AFTER THE ai_chat_bubble_component -------------")
+    print(llm_output)
+
+    # Trigger an async function that takes in the 
+
     ai_chat_bubble_component = unified_ui_controller_for_chat_window_and_body_scanner(
         llm_data=llm_output,
         user_message_text=user_message_text, 
         bubble_id=target_id 
     )
+
 
     animation_script_component = None
     scanner_command = llm_output.get('body_scanner_animation_action_comand', "idle")
@@ -620,7 +1084,7 @@ def get(auth):
                     cls="avatar placeholder p-0 w-8 h-8 rounded-full mr-2 bg-base-300"
                 ),
                 Div(
-                    P("Hey, Im Akasi,  lets build your wellness journal. A wellness journal is a compilation of everything related to your health, like your symptoms, conditions, and even uploaded photos or medical documents. Just start by telling me how you feel today.", cls="text-sm leading-relaxed chat-message-text"),
+                    P("Hi there! Im Akasi, your personal wellness assistant. I help you track your health by building a wellness journal. I’ve activated my body scanner to check how you're doing. Just start by telling me how you feel today. You can also add notes, symptoms, photos, or any medical documents along the way. Lets begin!", cls="text-sm leading-relaxed chat-message-text"),
                     cls="chat-bubble chat-bubble-neutral bg-base-300 text-base-content rounded-bl-none shadow-md"
                 ),
                 cls="flex items-end max-w-xs sm:max-w-md md:max-w-lg"
@@ -628,155 +1092,7 @@ def get(auth):
             cls="flex justify-start chat-message-container animate-slideUp"
         ),
         
-        # Div(
-        #     Div(
-        #         Div(
-        #             Div(
-        #                 Span("person", cls="material-icons emoji-icon"),
-        #                 cls="bg-transparent text-neutral-content rounded-full w-8 h-8 text-sm flex items-center justify-center"
-        #             ),
-        #             cls="avatar placeholder p-0 w-8 h-8 rounded-full ml-2 user-message-gradient"
-        #         ),
-        #         Div(
-        #             P("Hello Akasi!", cls="text-sm leading-relaxed chat-message-text"),
-        #             cls="chat-bubble chat-bubble-primary user-message-gradient rounded-br-none shadow-md"
-        #         ),
-        #         cls="flex items-end max-w-xs sm:max-w-md md:max-w-lg flex-row-reverse"
-        #     ),
-        #     cls="flex justify-end"
-        # ),
-        # Div(
-        #     Div(
-        #         Div(
-        #             Div(
-        #                 Span("smart_toy", cls="material-icons emoji-icon"),
-        #                 cls="bg-transparent text-neutral-content rounded-full w-8 h-8 text-sm flex items-center justify-center"
-        #             ),
-        #             cls="avatar placeholder p-0 w-8 h-8 rounded-full mr-2 bg-base-300"
-        #         ),
-        #         Div(
-        #             P("Here's a response to your query about images.", cls="text-sm leading-relaxed chat-message-text"),
-        #             cls="chat-bubble chat-bubble-neutral bg-base-300 text-base-content rounded-bl-none shadow-md"
-        #         ),
-        #         cls="flex items-end max-w-xs sm:max-w-md md:max-w-lg"
-        #     ),
-        #     cls="flex justify-start"
-        # ),
-        # Div(
-        #     Div(
-        #         Div(
-        #             Div(
-        #                 Span("person", cls="material-icons emoji-icon"),
-        #                 cls="bg-transparent text-neutral-content rounded-full w-8 h-8 text-sm flex items-center justify-center"
-        #             ),
-        #             cls="avatar placeholder p-0 w-8 h-8 rounded-full ml-2 user-message-gradient"
-        #         ),
-        #         Div(
-        #             P("Okay, check out these images.", cls="text-sm leading-relaxed chat-message-text"),
-        #             Div(
-        #                 Div(
-        #                     Div(
-        #                         Img(src="https://placehold.co/100x75/A7F3D0/10B981?text=Img1", alt="Attached image 1", cls="rounded max-w-full h-auto max-h-32 object-contain", onerror="this.onerror=null; this.src='https://placehold.co/100x75/FEE2E2/DC2626?text=Error';"),
-        #                         P("image_sample_1.jpg (78 KB)", cls="text-xs text-base-content/70 mt-1 truncate")
-        #                     ),
-        #                     cls="p-1.5 rounded-md bg-base-100/50 border border-base-300/50"
-        #                 ),
-        #                 Div(
-        #                     Div(
-        #                         Img(src="https://placehold.co/100x75/A7F3D0/10B981?text=Img2", alt="Attached image 2", cls="rounded max-w-full h-auto max-h-32 object-contain", onerror="this.onerror=null; this.src='https://placehold.co/100x75/FEE2E2/DC2626?text=Error';"),
-        #                         P("photo_of_rash.png (120 KB)", cls="text-xs text-base-content/70 mt-1 truncate")
-        #                     ),
-        #                     cls="p-1.5 rounded-md bg-base-100/50 border border-base-300/50"
-        #                 ),
-        #                 Div(
-        #                     Div(
-        #                         Img(src="https://placehold.co/100x75/A7F3D0/10B981?text=Img3", alt="Attached image 3", cls="rounded max-w-full h-auto max-h-32 object-contain", onerror="this.onerror=null; this.src='https://placehold.co/100x75/FEE2E2/DC2626?text=Error';"),
-        #                         P("scan_result_view.jpeg (95 KB)", cls="text-xs text-base-content/70 mt-1 truncate")
-        #                     ),
-        #                     cls="p-1.5 rounded-md bg-base-100/50 border border-base-300/50"
-        #                 ),
-        #                 cls="mt-2 pt-2 space-y-2 border-t border-green-400/50"
-        #             ),
-        #             cls="chat-bubble chat-bubble-primary user-message-gradient rounded-b-xl shadow-md"
-        #         ),
-        #         cls="flex items-end max-w-xs sm:max-w-md md:max-w-lg flex-row-reverse"
-        #     ),
-        #     cls="flex justify-end"
-        # ),
-        # Div(
-        #     Div(
-        #         Div(
-        #             Div(
-        #                 Span("smart_toy", cls="material-icons emoji-icon"),
-        #                 cls="bg-transparent text-neutral-content rounded-full w-8 h-8 text-sm flex items-center justify-center"
-        #             ),
-        #             cls="avatar placeholder p-0 w-8 h-8 rounded-full mr-2 bg-base-300"
-        #         ),
-        #         Div(
-        #             P("Understood. And for the documents?", cls="text-sm leading-relaxed chat-message-text"),
-        #             cls="chat-bubble chat-bubble-neutral bg-base-300 text-base-content rounded-bl-none shadow-md"
-        #         ),
-        #         cls="flex items-end max-w-xs sm:max-w-md md:max-w-lg"
-        #     ),
-        #     cls="flex justify-start"
-        # ),
-        # Div(
-        #     Div(
-        #         Div(
-        #             Div(
-        #                 Span("person", cls="material-icons emoji-icon"),
-        #                 cls="bg-transparent text-neutral-content rounded-full w-8 h-8 text-sm flex items-center justify-center"
-        #             ),
-        #             cls="avatar placeholder p-0 w-8 h-8 rounded-full ml-2 user-message-gradient"
-        #         ),
-        #         Div(
-        #             P("And here are some PDF documents.", cls="text-sm leading-relaxed chat-message-text"),
-        #             Div(
-        #                 Div(
-        #                     Div(
-        #                         Span("attachment", cls="material-icons emoji-icon text-xl text-primary flex-shrink-0"),
-        #                         Div(
-        #                             P("lab_results_q1.pdf", cls="text-xs font-medium text-base-content/90 truncate"),
-        #                             P("256 KB", cls="text-xs text-base-content/70"),
-        #                             cls="flex-grow overflow-hidden"
-        #                         ),
-        #                         cls="flex items-center gap-2"
-        #                     ),
-        #                     cls="p-1.5 rounded-md bg-base-100/50 border border-base-300/50"
-        #                 ),
-        #                 Div(
-        #                     Div(
-        #                         Span("attachment", cls="material-icons emoji-icon text-xl text-primary flex-shrink-0"),
-        #                         Div(
-        #                             P("medical_history_summary.pdf", cls="text-xs font-medium text-base-content/90 truncate"),
-        #                             P("512 KB", cls="text-xs text-base-content/70"),
-        #                             cls="flex-grow overflow-hidden"
-        #                         ),
-        #                         cls="flex items-center gap-2"
-        #                     ),
-        #                     cls="p-1.5 rounded-md bg-base-100/50 border border-base-300/50"
-        #                 ),
-        #                 Div(
-        #                     Div(
-        #                         Span("attachment", cls="material-icons emoji-icon text-xl text-primary flex-shrink-0"),
-        #                         Div(
-        #                             P("prescription_details.pdf", cls="text-xs font-medium text-base-content/90 truncate"),
-        #                             P("128 KB", cls="text-xs text-base-content/70"),
-        #                             cls="flex-grow overflow-hidden"
-        #                         ),
-        #                         cls="flex items-center gap-2"
-        #                     ),
-        #                     cls="p-1.5 rounded-md bg-base-100/50 border border-base-300/50"
-        #                 ),
-        #                 cls="mt-2 pt-2 space-y-2 border-t border-green-400/50"
-        #             ),
-        #             cls="chat-bubble chat-bubble-primary user-message-gradient rounded-b-xl shadow-md"
-        #         ),
-        #         cls="flex items-end max-w-xs sm:max-w-md md:max-w-lg flex-row-reverse"
-        #     ),
-        #     cls="flex justify-end"
-        # ),
-        # Div(id="messagesEndRef", cls="h-0"), 
+
         id="messagesArea",
         cls="flex-grow p-3 sm:p-4 space-y-3 overflow-y-auto bg-base-200 scrollbar-thin"
     )
@@ -858,21 +1174,6 @@ def get(auth):
 
 
     scanner_main_area_content = Div(
-        Div(
-            Button("Start Scan", id="debugStartScanButton", cls="btn primary-green-gradient",
-                hx_get="/trigger_body_scan_animation_script", hx_target="#script_runner_area", hx_swap="innerHTML"),
-
-            Button("Stop Scan", id="debugStopScanButton", cls="btn primary-green-gradient",
-                hx_get="/trigger_stop_body_scan_script", hx_target="#script_runner_area", hx_swap="innerHTML"),
-
-            Button("Narrow Scan", id="debugNarrowScanButton", cls="btn primary-green-gradient",
-            hx_get="/js_show_narrow_scan_modal", hx_target="#script_runner_area", hx_swap="innerHTML"),
-
-            Button("Full Body Glow", id="debugFullBodyGlowButton", cls="btn primary-green-gradient",
-                hx_get="/trigger_body_glow_script", hx_target="#script_runner_area", hx_swap="innerHTML"),
-
-            cls="grid grid-cols-2 sm:grid-cols-4 gap-2 w-full max-w-md px-2"
-        ),
         Div(
             scanner_visual_container,
             Div(
