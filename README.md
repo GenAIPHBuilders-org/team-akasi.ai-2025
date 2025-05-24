@@ -39,20 +39,36 @@ This repository contains the work of Team Akasi.ai for the GenAI PHBuilders Hack
   </table>
 </div>
 
+## 🛠️ Tech Stack & Architecture
 
-## 🛠️ Tech Stack
+Akasi.ai leverages a modern tech stack to deliver an intelligent and responsive health management experience. Our architecture is designed around a multi-agent system to handle various aspects of health data processing and user interaction.
 
-**Front-end:**
-- [Fasthtml](https://fastht.ml/) — A minimalist Python web framework that enables building dynamic, component-based web apps with HTMX and ASGI, all in pure Python.
+### Core Technologies
 
-**Back-end:**
-- [Supabase](https://supabase.com/) — An open-source backend-as-a-service offering PostgreSQL, real-time data sync, authentication, storage, and serverless functions—ideal for building scalable applications. 
+**Platform Framework:** FastHTML - The entire platform is built using FastHTML, allowing for rapid development of dynamic web applications purely in Python.
 
-**AI Inference & LLM Integrations:**
-- [AWS Bedrock](https://aws.amazon.com/bedrock/)
-- [Anthropic Claude](https://www.anthropic.com/index/claude)
-- [OpenAI](https://openai.com/)
-- [Together.ai](https://www.together.ai/)
+**AI Agent Framework:** LangGraph - We use LangGraph to build and orchestrate our multi-agent AI system, managing complex workflows for health information processing.
+- **Agent 1:** Responsible for empathetically gathering health information from the user.
+- **Agent 2:** Formats the gathered information into a structured and usable form for the Health Diary and platform display.
+
+**Large Language Model (LLM):** Claude 3.5 Sonnet v2 via AWS Bedrock - Powers the intelligence of our AI agents, enabling natural language understanding and generation.
+
+### Frontend Styling
+- **Tailwind CSS** - A utility-first CSS framework for rapidly building custom user interfaces.
+- **DaisyUI** - A component library for Tailwind CSS to accelerate UI development.
+- **Standard JS and CSS** for additional interactivity and custom styling.
+
+### Backend (Database & Authentication)
+**Supabase** - Provides robust backend services including a PostgreSQL database, user authentication, and storage.
+
+### Simplified Architecture Overview
+
+Below is a simplified overview of our multi-agent architecture:
+
+```
+User Input → Agent 1 (Info Gathering with Tools like Medical Doc Summarizer) → LangGraph Workflows (UI Controller, LLM Journal Entry) → Agent 2 (Data Formatting & Health Diary Building with Supabase Tool) → Akasi.ai Dashboard
+```
+
 
 ---
 
@@ -63,24 +79,69 @@ This project uses environment variables to securely manage external service cred
 Create a `.env` file at the root of the project with the following keys:
 
 ```bash
-# Supabase
-SUPABASE_URL=your-supabase-url
-SUPABASE_ANON_KEY=your-supabase-anon-key
+# Supabase - DONT WORRY THIS IS A DISPOSABLE SUPABASE INSTANCE YOU CAN USE OUR  KEYS
+SUPABASE_URL_NEW="https://pcygqqevesxpeeyxxfjw.supabase.co"
+SUPABASE_ANON_KEY_NEW="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBjeWdxcWV2ZXN4cGVleXh4Zmp3Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDY4Njc3NzMsImV4cCI6MjA2MjQ0Mzc3M30.HRKiFi4z4Z3x0A7zuUEbeFbQT5NhVBEssvdWZR_iUHU"
 
 # AWS Bedrock
 AWS_ACCESS_KEY_ID=your-aws-access-key-id
 AWS_SECRET_ACCESS_KEY=your-aws-secret-access-key
-AWS_REGION=your-aws-region
 
-# OpenAI
-OPENAI_API_KEY=your-openai-api-key
-
-# Anthropic Claude
-CLAUDE_API_KEY=your-claude-api-key
-
-# Together AI
-TOGETHER_API_KEY=your-together-api-key
 ```
+
+## 🚀 Getting Started: Installation Guide
+
+Follow these steps to get Akasi.ai running on your local machine:
+
+### 1. Fork the Repository (Optional but Recommended for Contribution)
+If you plan to contribute or experiment, start by forking this repository to your own GitHub account.
+
+### 2. Clone the Repository
+Clone the repository to your local machine:
+
+```bash
+git clone https://github.com/GenAIPHBuilders-org/team-akasi.ai-2025.git
+cd team-akasi.ai-2025
+```
+
+### 3. Create and Activate a Python Virtual Environment
+It's highly recommended to use a virtual environment to manage project dependencies.
+
+```bash
+# Create a virtual environment (e.g., named 'venv')
+python -m venv venv
+
+# Activate the virtual environment
+# On Windows:
+venv\Scripts\activate
+# On macOS/Linux:
+source venv/bin/activate
+```
+
+### 4. Install Dependencies
+Install all the required packages listed in requirements.txt:
+
+```bash
+pip install -r requirements.txt
+```
+
+### 5. Set Up Environment Variables
+Create a `.env` file in the root directory of the project. Copy the contents from `.env.example` (if provided) or add the necessary variables as specified in the "Environment Variables" section below.
+
+### 6. Run the Application
+Once the dependencies are installed and environment variables are set, you can run the application:
+
+```bash
+python main.py
+```
+
+The application should now be running, and you can access it as indicated by the FastHTML server output (usually http://127.0.0.1:8000).
+
+### Test User Credentials
+You can log in with the following test user:
+- **Email:** testuser1@gmail.com
+- **Password:** test1234
+
 
 
 
