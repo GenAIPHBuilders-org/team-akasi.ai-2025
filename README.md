@@ -52,7 +52,7 @@ Akasi.ai leverages a modern tech stack to deliver an intelligent and responsive 
 
 **AI Agent Framework:** LangGraph - We use LangGraph to build and orchestrate our multi-agent AI system, managing complex workflows for health information processing.
 - **Agent 1:** Responsible for empathetically gathering health information from the user.
-- **Agent 2:** Formats the gathered information into a structured and usable form for the Health Diary and platform display.
+- **Agent 2:** Formats the gathered information into a structured and usable form for the Health Diary and platform display. (IN DEVELOPMENT PHASE)
 
 **Large Language Model (LLM):** Claude 3.5 Sonnet v2 via AWS Bedrock - Powers the intelligence of our AI agents, enabling natural language understanding and generation.
 
