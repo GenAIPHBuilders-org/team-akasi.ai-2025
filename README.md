@@ -43,6 +43,9 @@ This repository contains the work of Team Akasi.ai for the GenAI PHBuilders Hack
 
 Akasi.ai leverages a modern tech stack to deliver an intelligent and responsive health management experience. Our architecture is designed around a multi-agent system to handle various aspects of health data processing and user interaction.
 
+![Akasi.ai Architecture](https://pcygqqevesxpeeyxxfjw.supabase.co/storage/v1/object/public/users/Medical%20Docs/user_1/akasi.ai%20Pitch%20Deck%20-%20Agentic%20AI%20Hackathon%202025%20(6).png)
+
+
 ### Core Technologies
 
 **Platform Framework:** FastHTML - The entire platform is built using FastHTML, allowing for rapid development of dynamic web applications purely in Python.
