@@ -327,3 +327,7 @@ dialog.modal .modal-box {
 #journalEntriesList .journal-entry-item { /* If you add this class to rendered items */
     /* Example: margin-bottom: 0.625rem; /* space-y-2.5 roughly */
 }
+
+
+@keyframes spin { to { transform: rotate(360deg); } } 
+.animate-spin { animation: spin 1s linear infinite; }

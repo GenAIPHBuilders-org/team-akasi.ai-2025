@@ -1,6 +1,4 @@
-// wellness_enhancements.js
 
-// --- SCANNER ANIMATION STATE & DOM ELEMENTS ---
 const SCAN_START_Y_VIEWBOX = 32;
 const SCAN_END_Y_VIEWBOX = 165;
 const SCAN_SPEED_UNITS_PER_INTERVAL = 1.0;
@@ -10,13 +8,10 @@ let globalScanLineDirection = 'down';
 let globalIsLineScanning = false;
 let globalScanLineAnimationInterval = null;
 
-// New state for FT SVG outline pulsating
 let globalIsFtBodyOutlinePulsating = false;
 
-// New state for narrow scan
 let globalNarrowScannedPartEl = null;
 
-// DOM Element References
 let scanLineAnimationGroupRawEl = null;
 let scanLineAnimationElementRawEl = null;
 let scanLineHighlightAnimationElementRawEl = null;
@@ -35,27 +30,24 @@ let stagedAttachmentsContainerEl = null;
 let attachImageButtonEl = null;
 let attachDocumentButtonEl = null;
 let chatFormEl = null;
-// We keep chatInputEl for initial setup, but will rely on event.target within htmx:configRequest
 let chatInputEl = null;
 
-// --- WELLNESS JOURNAL UI (Manual Modal Handling) ---
 let manualEntryModalJsEl = null;
-let manualEntryFormJsEl = null; // The form that will be submitted via HTMX
+let manualEntryFormJsEl = null;
 let manualDateInputJsEl = null;
 let addManualEntryButtonJsEl = null;
-let cancelManualEntryButtonJsEl = null; // The "Cancel" button inside the modal
-let closeManualEntryModalButtonJsEl = null; // The 'X' button inside the modal-box
+let cancelManualEntryButtonJsEl = null;
+let closeManualEntryModalButtonJsEl = null;
 
 
 
-// Function to initialize chat-related elements (call this in DOMContentLoaded)
 function initializeChatAttachmentElements() {
     fileInputEl = document.getElementById('fileInput');
     stagedAttachmentsContainerEl = document.getElementById('stagedAttachmentsContainer');
     attachImageButtonEl = document.getElementById('attachImageButton');
     attachDocumentButtonEl = document.getElementById('attachDocumentButton');
-    chatFormEl = document.getElementById('chatForm'); // Use the ID
-    chatInputEl = document.getElementById('chatInput'); // Initial reference
+    chatFormEl = document.getElementById('chatForm');
+    chatInputEl = document.getElementById('chatInput');
 
     if (attachImageButtonEl && fileInputEl) {
         attachImageButtonEl.addEventListener('click', () => {
@@ -142,7 +134,7 @@ function handleFileSelection(event) {
     const files = event.target.files;
     if (!files) return;
     const maxFiles = 5;
-    const maxSizePerFile = 5 * 1024 * 1024; // 5MB
+    const maxSizePerFile = 5 * 1024 * 1024;
 
     if (stagedFilesData.length + files.length > maxFiles) {
         showToast(`You can attach a maximum of ${maxFiles} files.`, 'warning');
@@ -165,7 +157,7 @@ function handleFileSelection(event) {
         stagedFilesData.push({ id: fileId, file: file, type: displayType });
     }
     renderStagedAttachments();
-    event.target.value = null; // Reset file input
+    event.target.value = null;
 }
 
 function renderStagedAttachments() {
@@ -651,6 +643,9 @@ document.addEventListener('DOMContentLoaded', () => {
     initializeChatAttachmentElements();
     initializeJournalModalElements(); // <--- ADD THIS CALL
 });
+
+
+
 
 
 

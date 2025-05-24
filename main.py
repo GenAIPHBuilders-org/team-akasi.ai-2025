@@ -1,6 +1,8 @@
 import datetime
+import traceback
 import random
 from datetime import datetime 
+from datetime import datetime, timezone, timedelta
 from fasthtml.svg import Svg, Defs, Pattern, Path, Rect, Text, NotStr, Ellipse, Circle, Group, G
 from fasthtml.common import *
 # Ensure all necessary SVG elements are imported
@@ -49,13 +51,17 @@ supabase: Client = create_client(supabase_url, supabase_anon_key)
 pending_journal_updates: List[dict] = []
 pending_journal_updates_2: List[dict] = []
 
+# Define Manila timezone (UTC+8)
+manila_timezone = timezone(timedelta(hours=8))
+current_date_manila_iso = datetime.now(manila_timezone).isoformat()
+
+
+
+
 def use_auth_context(access_token, refresh_token=None):
     """Set authentication context on the global client for the current request"""
     # Create a new instance with authentication context
-    client = create_client(
-        supabase_url=os.getenv("SUPABASE_URL"),
-        supabase_key=os.getenv("SUPABASE_ANON_KEY")
-    )
+    client = supabase
     
     # Set the session with the token
     client.auth.set_session(access_token, refresh_token)
@@ -374,10 +380,6 @@ tools_by_name = {tool.name: tool for tool in tools}
 llm_with_tools = llm.bind_tools(tools)
 
 
-# --- Agent State Definition ---
-
-
-
 # --- Node Functions ---
 def decide_action_node(state: MedicalAgentState):
     """
@@ -512,8 +514,6 @@ graph_1 = graph_builder.compile(checkpointer=memory)
 
 
 # ---🔵🔵🔵🔵 Workflow 1 : BODY SCANNER COMMANDER  🔵🔵🔵🔵------- 
-# Create an AI agent that has image tool that inteprets the message gets the data then gives it to the agent
-# Then add a workflow to the agent so that you can control the body scanner
 from pydantic import BaseModel, Field
 
 graph_builder_2 = StateGraph(MedicalAgentState)
@@ -595,7 +595,7 @@ graph_workflow_1 = graph_builder_2.compile()
 
 
 
-system_prompt_content_wf_2 = """You are an expert AI system responsible for managing a patient's wellness journal entries.
+system_prompt_content_wf_1 = """You are an expert AI system responsible for managing a patient's wellness journal entries.
 Your primary goal is to analyze the provided conversation history between a patient and an AI health assistant (Akasi), along with a list of existing wellness journal entries, to determine if a journal entry needs to be added, updated, or removed.
 You MUST output a single JSON object that strictly conforms to the 'WellnessJournalOperation' schema.
 
@@ -610,7 +610,18 @@ Based on a thorough analysis of these inputs, decide on ONE action ('ADD', 'UPDA
 **Guidelines for Determining the Action and Fields:**
 
 **General:**
-* `wellness_journal_entry_date`: Always format as YYYY-MM-DD. Infer from conversation if possible (e.g., "today," "last Tuesday," "on May 15th"). If an event date isn't clear but the conversation is current, use the current date for ADD/UPDATE.
+* `wellness_journal_entry_date`: This field is mandatory and must always be in **YYYY-MM-DD format.**
+    * **Reference Current Date:** Your main reference for dating any new or updated information is the current conversation date: {current_date_manila_iso} (Philippine Standard Time)**.
+    * **Specific Event Date from Conversation:** If the patient explicitly mentions a date for the symptoms or event they are describing (e.g., "I had a severe headache last Monday," "this started on May 20th," "yesterday I felt..."), you MUST calculate and use that specific date. Interpret "today," "yesterday," "X days ago" relative to the current conversation date ({current_date_manila_iso}, Philippine Standard Time).
+    * **Current Conversation Date as Default:** If the patient is describing current symptoms or events without specifying a past date, or if the date is ambiguous, you MUST use the current conversation date (i.e., {current_date_manila_iso}) for any 'ADD' or 'UPDATE' operations.
+    * **For 'REMOVE' actions:** Typically, use the `wellness_journal_entry_date` from the original entry being removed. If this is not available or applicable, you can use the current conversation date ({current_date_manila_iso}).
+
+
+* `wellness_journal_severity_value`: This is a mandatory integer field with a value of 1, 2, or 3.
+    * **1 (Low/Mild):** Assign this if the patient describes symptoms as minor, slight, not very bothersome, or if they don't mention significant impact on their daily life. Examples: "a slight headache," "feeling a bit tired," "it's a dull ache but I can manage."
+    * **2 (Medium/Moderate):** Assign this if symptoms are described as noticeable, causing some discomfort, interfering with some activities, or if a pain scale (e.g., 4-6 out of 10) is mentioned that suggests this level. Examples: "the pain is making it hard to concentrate," "I had to skip my morning walk," "it's pretty uncomfortable."
+    * **3 (High/Severe):** Assign this if symptoms are described as severe, intense, debilitating, significantly impacting daily activities, or if a high pain scale (e.g., 7-10 out of 10) is mentioned. Examples: "the pain is unbearable," "I couldn't get out of bed," "I'm in a lot of pain."
+    * **If severity is genuinely unclear from the conversation, default to 1.** However, try your best to infer from context (e.g., patient seeking urgent advice often implies higher severity for that specific concern).
 
 **If `wellness_journal_entry_action` is "ADD":**
 * **When to ADD:** The conversation introduces a new, distinct health concern, event, significant symptom update, or a topic that is not adequately covered by any existing journal entry.
@@ -641,7 +652,7 @@ Based on a thorough analysis of these inputs, decide on ONE action ('ADD', 'UPDA
 
 Analyze the inputs carefully and generate the single JSON object representing the most appropriate wellness journal operation. YOU CAN RETURN "NONE" IF THERE IS NO NEED TO PUT AN ENTRY
 """
-
+system_prompt_content_wf_2 = system_prompt_content_wf_1.format(current_date_manila_iso=current_date_manila_iso)
 
 class WellnessJournalOperation(BaseModel):
     """
@@ -699,6 +710,17 @@ class WellnessJournalOperation(BaseModel):
         )
     )
 
+    wellness_journal_severity_value: Literal[1, 2, 3] = Field(
+        ...,
+        description=(
+            "The severity of the reported symptom or condition, rated on a scale of 1 to 3. "
+            "1: Low/Mild (minor discomfort, not significantly impacting daily activities). "
+            "2: Medium/Moderate (noticeable impact, may interfere with some daily activities). "
+            "3: High/Severe (significant impact, debilitating, or significantly disrupts activities). "
+            "Infer this from the patient's description. If severity is unclear, default to 1."
+        )
+    )
+
 
 
 class Workflow2State(MedicalAgentState):
@@ -712,9 +734,9 @@ graph_builder_3 = StateGraph(Workflow2State)
 
 def wellness_journal_entry_generator_node(state: Workflow2State):
     print("\n--- Entered wellness_journal_entry_generator_node --------------------")
+    print(current_date_manila_iso)
 
-
-    print(pending_journal_updates)
+    # print(pending_journal_updates)
 
     conversation_history = state["messages"]
     existing_entries_str = state.get("existing_journal_entries_json_string", "[]") 
@@ -799,7 +821,8 @@ async def process_wellness_journal_data(input_payload_for_journal):
         "wellness_journal_title": actual_journal_operation.wellness_journal_title,
         "wellness_journal_current_summary": actual_journal_operation.wellness_journal_current_summary,
         "wellness_journal_entry_action": actual_journal_operation.wellness_journal_entry_action, 
-        "wellness_journal_entry_date": actual_journal_operation.wellness_journal_entry_date  
+        "wellness_journal_entry_date": actual_journal_operation.wellness_journal_entry_date,  
+        "wellness_journal_severity_value": actual_journal_operation.wellness_journal_severity_value,  
     }    
 
     print(wellness_journal_final_entries)
@@ -820,54 +843,76 @@ async def process_wellness_journal_data(input_payload_for_journal):
 
 # --- FT Component for a single journal entry ---
 def render_single_journal_entry_ft(entry_data: dict):
-    severity_map = {
-        1: {"text": "Low", "classes": "text-green-700 border-green-400 bg-green-100"},
-        2: {"text": "Medium", "classes": "text-yellow-700 border-yellow-400 bg-yellow-100"},
-        3: {"text": "High", "classes": "text-red-700 border-red-400 bg-red-100"},
-    }
-    # Use .get with a default for severity, and ensure it's an int
-    severity_val = entry_data.get("wellness_journal_severity")
     try:
-        severity_int = int(severity_val) if severity_val is not None else 1
-    except ValueError:
-        severity_int = 1 # Default if conversion fails
+        print(f"Debug: render_single_journal_entry_ft called with: {entry_data}")
         
-    severity_info = severity_map.get(severity_int, {"text": "N/A", "classes": "text-gray-600 border-gray-300 bg-gray-100"})
-    
-    entry_id_val = entry_data.get("wellness_journal_entry_id", f"entry-{time.time_ns()}")
-    item_id_attr = f"journal-entry-{entry_id_val}" # Unique ID for the div
+        severity_map = {
+            1: {"text": "Low", "classes": "text-green-700 border-green-400 bg-green-100"},
+            2: {"text": "Medium", "classes": "text-yellow-700 border-yellow-400 bg-yellow-100"},
+            3: {"text": "High", "classes": "text-red-700 border-red-400 bg-red-100"},
+        }
+        
+        # Use .get with a default for severity, and ensure it's an int
+        severity_val = entry_data.get("wellness_journal_severity_value")
+        print(f"Debug: severity_val = {severity_val}")
+        
+        try:
+            severity_int = int(severity_val) if severity_val is not None else 1
+        except ValueError:
+            severity_int = 1 # Default if conversion fails
+            
+        severity_info = severity_map.get(severity_int, {"text": "N/A", "classes": "text-gray-600 border-gray-300 bg-gray-100"})
+        
+        entry_id_val = entry_data.get("wellness_journal_entry_id", f"entry-{time.time_ns()}")
+        item_id_attr = f"journal-entry-{entry_id_val}" # Unique ID for the div
+        print(f"Debug: entry_id_val = {entry_id_val}, item_id_attr = {item_id_attr}")
 
-    # Format date nicely
-    try:
-        date_obj = datetime.fromisoformat(entry_data.get("wellness_journal_entry_date", datetime.now().isoformat()))
-        formatted_date = date_obj.strftime('%b %d, %Y') # e.g., May 23, 2025
-    except ValueError:
-        formatted_date = "Invalid Date"
+        # Format date nicely
+        try:
+            date_obj = datetime.fromisoformat(entry_data.get("wellness_journal_entry_date", datetime.now().isoformat()))
+            formatted_date = date_obj.strftime('%b %d, %Y') # e.g., May 23, 2025
+        except ValueError as e:
+            print(f"Debug: Date parsing error: {e}")
+            formatted_date = "Invalid Date"
 
-
-    return Div(
-        Div(
-            H3(entry_data.get("wellness_journal_title", "No Title"), cls="font-medium text-base-content/90 text-sm"),
-            Span(severity_info["text"], cls=f"text-xs font-semibold px-2 py-0.5 rounded-full border {severity_info['classes']}"),
-            cls="flex justify-between items-start mb-1"
-        ),
-        P(entry_data.get("wellness_journal_current_summary", "No summary."), cls="text-base-content/80 text-xs mb-1.5 leading-relaxed"),
-        P(formatted_date, cls="text-base-content/70 text-xs text-right"),
-        Button(
-            Span("delete", cls="material-icons emoji-icon text-sm"), # Smaller icon
-            hx_post="/htmx/journal_entry_action",
-            hx_vals=json.dumps({"wellness_journal_entry_id": str(entry_id_val), "wellness_journal_entry_action": "REMOVE"}),
-            hx_target=f"#{item_id_attr}", # Target self for removal
-            hx_swap="outerHTML",          # Remove the element
-            # Add hx_confirm here if desired: hx_confirm="Are you sure you want to remove this entry?"
-            cls="btn btn-xs btn-circle btn-ghost text-error absolute top-1 right-1 opacity-50 hover:opacity-100",
-            title="Remove Entry"
-        ),
-        cls="bg-base-100/80 backdrop-blur-sm rounded-lg p-3 shadow-md hover:shadow-lg transition-shadow border border-base-300/80 relative animate-fadeIn", # Added animation
-        id=item_id_attr
-    )
-
-
+        print("Debug: About to create Div element")
+        
+        result = Div(
+            Div(
+                H3(entry_data.get("wellness_journal_title", "No Title"), cls="font-medium text-base-content/90 text-sm"),
+                Span(severity_info["text"], cls=f"text-xs font-semibold px-2 py-0.5 rounded-full border {severity_info['classes']}"),
+                cls="flex justify-between items-start mb-1"
+            ),
+            P(entry_data.get("wellness_journal_current_summary", "No summary."), cls="text-base-content/80 text-xs mb-1.5 leading-relaxed"),
+            P(formatted_date, cls="text-base-content/70 text-xs text-right"),
+            Button(
+                Span("delete", cls="material-icons emoji-icon text-sm"), # Smaller icon
+                hx_post="/htmx/journal_entry_action",
+                hx_vals=json.dumps({"wellness_journal_entry_id": str(entry_id_val), "wellness_journal_entry_action": "REMOVE"}),
+                hx_target=f"#{item_id_attr}", # Target self for removal
+                hx_swap="outerHTML",          # Remove the element
+                # Add hx_confirm here if desired: hx_confirm="Are you sure you want to remove this entry?"
+                cls="btn btn-xs btn-circle btn-ghost text-error absolute top-1 right-1 opacity-50 hover:opacity-100",
+                title="Remove Entry"
+            ),
+            cls="bg-base-100/80 backdrop-blur-sm rounded-lg p-3 shadow-md hover:shadow-lg transition-shadow border border-base-300/80 relative animate-fadeIn", # Added animation
+            id=item_id_attr
+        )
+        
+        print(f"Debug: Successfully created Div element: {type(result)}")
+        return result
+        
+    except Exception as e:
+        print(f"ERROR in render_single_journal_entry_ft: {e}")
+        print(f"ERROR traceback: {traceback.format_exc()}")
+        
+        # Return a fallback div instead of None
+        fallback_id = f"journal-entry-error-{entry_data.get('wellness_journal_entry_id', 'unknown')}"
+        return Div(
+            P(f"Error rendering journal entry: {str(e)}", cls="text-red-500"),
+            id=fallback_id,
+            cls="bg-red-50 border border-red-200 p-3 rounded"
+        )
 
 # --- ⚪⚪⚪⚪ Workflow 2 : JOURNAL ENTRY CONTROLLER  START  ⚪⚪⚪⚪ ------- 
 
@@ -1458,7 +1503,10 @@ def get(auth):
             Button(
                 Span("menu_book", cls="material-icons emoji-icon"), " Finish Wellness Journal",
                 id="finishJournalButton",
-                cls="btn btn-sm w-full flex items-center justify-center gap-2 primary-green-gradient"
+                cls="btn btn-sm w-full flex items-center justify-center gap-2 primary-green-gradient",
+                hx_post="/finalize-journal",         # New endpoint to handle this action
+                hx_target="#diaryLoadingOverlay",    # Target the existing overlay
+                hx_swap="innerHTML"                  # Replace its content with the response
             ),
             cls="w-full max-w-xs flex flex-col items-center"
         ),
@@ -1799,43 +1847,95 @@ async def post_journal_action_handler(req): # Renamed for clarity
     return HtmxResponseHeaders(HX_Reswap="none") # Tell HTMX to do nothing if action not handled
 
 
-
 @rt("/htmx/get_journal_update")
-def get_journal_update_handler(req): # Changed name for clarity
-    global pending_journal_updates # Ensure access to the global list
+def get_journal_update_handler(): 
+    print("--- Entered /htmx/get_journal_update handler ---")
+    global pending_journal_updates # Use the primary queue for UI updates
+    global pending_journal_updates_2 # Master list, used for context in REMOVE OOB
+
+    rendered_html_component = None
+    action_performed = None
+    processed_entry_id = None
+    entry_operation_data = None # Initialize
+
     if pending_journal_updates:
-        update_data = pending_journal_updates.pop(0) # Get the oldest update (FIFO)
-        action = update_data.get("wellness_journal_entry_action")
-        entry_id = update_data.get("wellness_journal_entry_id") # Needed for UPDATE/REMOVE
+        try:
+            entry_operation_data = pending_journal_updates.pop(0) 
+            print(f"Debug (get_journal_update_handler): Processing journal operation data: {entry_operation_data}")
+            
+            if not isinstance(entry_operation_data, dict):
+                print(f"ERROR (get_journal_update_handler): Popped data is not a dictionary: {entry_operation_data}")
+                entry_operation_data = None # Invalidate it
+            else:
+                action_performed = entry_operation_data.get("wellness_journal_entry_action")
+                processed_entry_id = entry_operation_data.get("wellness_journal_entry_id")
+            
+            # Attempt to render if data is suitable for ADD/UPDATE
+            if entry_operation_data and action_performed in ["ADD", "UPDATE"]:
+                print(f"Debug (get_journal_update_handler): Attempting to render for action '{action_performed}' with data: {entry_operation_data}")
+                rendered_html_component = render_single_journal_entry_ft(entry_operation_data)
+            elif entry_operation_data and action_performed == "REMOVE" and processed_entry_id:
+                # For REMOVE, create a specific empty component for OOB removal
+                target_id_attr = f"journal-entry-{processed_entry_id}"
+                rendered_html_component = Div(id=target_id_attr, hx_swap_oob="true") 
+                print(f"Debug (get_journal_update_handler): Action REMOVE for ID {processed_entry_id}. Created empty OOB component.")
+            elif entry_operation_data: # NONE_ACTION or unknown
+                 print(f"Debug (get_journal_update_handler): Action '{action_performed}' for ID {processed_entry_id}. No UI component to render from this handler for this action.")
+                 # rendered_html_component remains None, will be caught by the guard below.
 
-        if action == "ADD":
-            # This will be prepended to #journalEntriesList by the hx-swap="afterbegin"
-            # on the journalUpdateEventHandler div.
-            # The client-side JS will handle showing/hiding the placeholder.
-            return render_single_journal_entry_ft(update_data)
+        except IndexError:
+            print("Debug (get_journal_update_handler): pending_journal_updates was or became empty during processing.")
+            # entry_operation_data and rendered_html_component remain None
+        except Exception as e:
+            print(f"ERROR (get_journal_update_handler): Exception during processing: {e}\n{traceback.format_exc()}")
+            # entry_operation_data and rendered_html_component remain None
+    else:
+        print("Debug (get_journal_update_handler): pending_journal_updates is empty. No update to send.")
+        # entry_operation_data and rendered_html_component remain None
 
-        elif action == "UPDATE":
-            if not entry_id:
-                print("Error: UPDATE action received without wellness_journal_entry_id")
-                return "" # Or an error message
+    # CRITICAL GUARD: Check if a component was successfully prepared
+    if rendered_html_component is None:
+        print(f"Debug (get_journal_update_handler): rendered_html_component is None before action dispatch. Action was '{action_performed}'. Returning 204.")
+        return HTMLResponse(content="", status_code=204)
 
-            # Create the updated HTML for the entry
-            updated_entry_html = render_single_journal_entry_ft(update_data)
-            # updated_entry_html is already a Div with id=f"journal-entry-{entry_id}"
-            # Send it as an OOB swap to replace the existing entry.
-            return updated_entry_html.With(**{'hx_swap_oob': 'outerHTML'})
+    # --- Action-specific return logic ---
+    if action_performed == "ADD":
+        print(f"Debug (get_journal_update_handler): Action ADD for {processed_entry_id}. Returning component directly for 'afterbegin' swap.")
+        return FtResponse(
+            content=(
+                rendered_html_component,
+                Div(id="noJournalEntries", style="display: none;", hx_swap_oob="true"),
+                Div(id="clearJournalContainer", style="display: flex;", hx_swap_oob="true")
+            )
+        )
+    elif action_performed == "UPDATE":
+        print(f"Debug (get_journal_update_handler): Action UPDATE for {processed_entry_id}. Modifying attrs for OOB swap.")
+        # Directly modify attributes to set hx-swap-oob, avoiding .With()
+        if hasattr(rendered_html_component, 'attrs') and isinstance(rendered_html_component.attrs, dict):
+            rendered_html_component.attrs['hx-swap-oob'] = 'true' # kebab-case for HTML attributes
+            print(f"DIAGNOSTIC (UPDATE path - direct attrs): Attributes modified. Returning component.")
+            return rendered_html_component # Return the modified component for OOB swap
+        else:
+            # This case should ideally not be hit if render_single_journal_entry_ft always returns a valid FT component
+            print(f"CRITICAL ERROR (get_journal_update_handler - UPDATE): rendered_html_component (type: {type(rendered_html_component)}) lacks .attrs dict or not a dict. ID: {processed_entry_id}")
+            return HTMLResponse("Error: Server component malformed for update.", status_code=500)
 
-        elif action == "REMOVE":
-            if not entry_id:
-                print("Error: REMOVE action received without wellness_journal_entry_id")
-                return "" # Or an error message
+    elif action_performed == "REMOVE": 
+        # rendered_html_component here is the empty Div(id=target_id_attr, hx_swap_oob="true")
+        print(f"Debug (get_journal_update_handler): Action REMOVE for {processed_entry_id}. Returning OOB removal component.")
+        if not pending_journal_updates_2: # Check the master list for emptiness
+             return FtResponse(
+                content=(
+                    rendered_html_component, 
+                    Div(id="noJournalEntries", style="display: flex;", hx_swap_oob="true"),
+                    Div(id="clearJournalContainer", style="display: none;", hx_swap_oob="true")
+                )
+            )
+        return rendered_html_component # Just the OOB empty div to remove the item
 
-            # Send an empty Div as an OOB swap to remove the element by its ID.
-            # The Div's content will be empty, effectively removing the target.
-            # The client-side JS will handle showing/hiding the placeholder if the list becomes empty.
-            return Div(id=f"journal-entry-{entry_id}", hx_swap_oob="outerHTML")
-
-    return "" # Return an empty string if no updates, HTMX will do nothing.
+    else: 
+        print(f"Warning (get_journal_update_handler): Unhandled action '{action_performed}' or component state. Returning 204.")
+        return HTMLResponse(content="", status_code=204)
 
 
 
@@ -1853,6 +1953,45 @@ async def post_clear_journal_handler(req): # Changed name
 
     return empty_journal_list_oob, no_entries_div_oob, clear_button_div_oob
 
+
+@rt('/finalize-journal')
+def post_finalize_journal():
+    # Define the HTML content for the loading screen
+    loading_elements_tuple = (
+        Span("hourglass_empty", cls="material-icons text-emerald-400 mb-6 text-5xl animate-spin"),
+        H2("Just a moment! Your Healthy Diary is coming together", cls="text-white text-2xl font-semibold mb-3 text-center px-4"),
+        P(
+            "Akasi is thoughtfully piecing together your wellness journal entries to give you a clear snapshot of your well-being",
+            cls="text-center text-gray-300 text-lg max-w-md px-4"
+        )
+    )
+
+    # JavaScript to run after the new content is swapped in and this script is processed by HTMX
+    js_to_run_on_client = """
+    (function() {
+        const overlay = document.getElementById('diaryLoadingOverlay');
+        if (overlay) {
+            // *** THIS IS THE KEY LINE TO SHOW THE OVERLAY ***
+            overlay.style.display = 'flex'; 
+
+            // Optional: Re-trigger fade-in animation
+            overlay.classList.remove('animate-fadeIn');
+            void overlay.offsetWidth; // Force browser reflow/repaint
+            overlay.classList.add('animate-fadeIn');
+            
+            console.log("Loading overlay displayed via inline script. Redirecting to /home in 5 seconds.");
+        } else {
+            console.error("diaryLoadingOverlay (for inline script) not found!");
+        }
+
+        // Set a timeout to redirect to /home after 5 seconds
+        setTimeout(function() {
+            window.location.href = '/home';
+        }, 5000); // 5000 milliseconds = 5 seconds
+    })();
+    """
+    
+    return loading_elements_tuple, Script(js_to_run_on_client)
 
 
 # Landing Page
@@ -2684,7 +2823,7 @@ def form_view(auth):
 
     full_name_input = Div(
         Label(Span("Full name", cls="label-text text-gray-700"), For="fullName", cls="label"),
-        Input(type="text", id="fullName", name="full_name", placeholder="e.g., Maria Cruz",
+        Input(type="text", id="fullName", name="full_name", placeholder="e.g., Test User",
               cls="input input-bordered input-primary w-full focus:ring-teal-500 focus:border-teal-500", required=True)
     )
 
@@ -2910,7 +3049,7 @@ document.addEventListener('DOMContentLoaded', () => {
 def get(auth):
     if auth is None: return RedirectResponse('/login', status_code=303)
     
-    user_name = auth.get('display_name', 'Maria') 
+    user_name = auth.get('display_name', 'Test User') 
     user_initial = user_name[0].upper() if user_name else 'A'
 
     top_nav_bar = Nav(
@@ -2988,7 +3127,7 @@ def get(auth):
 @rt('/home/home-view')
 def home_tab_view(auth):
     if auth is None: return Div("Not authenticated", cls="text-red-500 p-4")
-    user_name = auth.get('display_name', 'Maria') 
+    user_name = auth.get('display_name', 'Test User') 
     return render_home_tab_content(user_name, auth) 
 
 def render_home_tab_content(user_name, auth_session_data):
@@ -3158,7 +3297,7 @@ def insights_tab_view(auth):
 def profile_tab_view(auth):
     if auth is None: return Div("Not authenticated", cls="text-red-500 p-4")
     
-    user_name = auth.get('display_name', 'Maria')
+    user_name = auth.get('display_name', 'Test User')
     user_email = auth.get('email', 'maria@example.com')
     user_initial = user_name[0].upper() if user_name else 'A'
     
