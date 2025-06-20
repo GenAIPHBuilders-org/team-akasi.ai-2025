@@ -3,9 +3,9 @@ import traceback
 import random
 from datetime import datetime 
 from datetime import datetime, timezone, timedelta
-from fasthtml.svg import Svg, Defs, Pattern, Path, Rect, Text, NotStr, Ellipse, Circle, Group, G
+from fasthtml.svg import Svg, Path, Rect, Text, NotStr, Ellipse, Circle
+from fasthtml.svg import G  # type: ignore
 from fasthtml.common import *
-# Ensure all necessary SVG elements are imported
 from supabase import create_client, Client
 from dotenv import load_dotenv
 import os
@@ -20,7 +20,7 @@ import urllib.parse
 from starlette.datastructures import UploadFile
 import base64
 from langchain.chat_models import init_chat_model
-from typing import Annotated
+from typing import Annotated, List, Any, cast
 from typing_extensions import TypedDict
 from langgraph.graph import StateGraph, START, END
 from langgraph.graph.message import add_messages
@@ -35,6 +35,7 @@ from langchain_core.messages import (
 )
 from typing import Annotated, Literal
 from langgraph.checkpoint.memory import MemorySaver
+from typing import Union
 
 
 
@@ -43,8 +44,14 @@ from langgraph.checkpoint.memory import MemorySaver
 BASE_DIR = Path(__file__).resolve().parent
 load_dotenv(os.path.join(BASE_DIR, '.env'))
 
+
 supabase_url = os.getenv("SUPABASE_URL_NEW")
 supabase_anon_key = os.getenv("SUPABASE_ANON_KEY_NEW")
+
+
+if not supabase_url or not supabase_anon_key:
+    raise ValueError("Missing required Supabase environment variables")
+
 supabase: Client = create_client(supabase_url, supabase_anon_key)
 
 # --- Global Store for Pending Journal Updates ---
@@ -64,7 +71,7 @@ def use_auth_context(access_token, refresh_token=None):
     client = supabase
     
     # Set the session with the token
-    client.auth.set_session(access_token, refresh_token)
+    client.auth.set_session(access_token, refresh_token or "")
     
     return client
 
@@ -149,68 +156,68 @@ def create_main_anatomy_svg():
 
     return Svg(
         G( # Head
-            Ellipse(cx="100", cy="40", rx="35", ry="30", fill=default_body_fill, stroke=default_body_stroke, stroke_width=default_stroke_width),
+            Ellipse(cx=100, cy=40, rx="35", ry="30", fill=default_body_fill, stroke=default_body_stroke, stroke_width=default_stroke_width),
             id="head_group", cls="body-part", data_name="Head", data_info="The head contains the brain, eyes, ears, nose, and mouth. It is crucial for sensory input and cognitive functions."
         ),
         G( # Neck
-            Rect(x="90", y="70", width="20", height="15", rx="2", fill=default_body_fill, stroke=default_body_stroke, stroke_width=default_stroke_width),
+            Rect(x=90, y=70, width="20", height="15", rx="2", fill=default_body_fill, stroke=default_body_stroke, stroke_width=default_stroke_width),
             id="neck_group", cls="body-part", data_name="Neck", data_info="The neck connects the head to the torso and houses the cervical spine, esophagus, and trachea."
         ),
         G( # Thorax
-            Rect(x="60", y="85", width="80", height="75", rx="10", fill=default_body_fill, stroke=default_body_stroke, stroke_width=default_stroke_width),
+            Rect(x=60, y=85, width="80", height="75", rx="10", fill=default_body_fill, stroke=default_body_stroke, stroke_width=default_stroke_width),
             id="thorax_group", cls="body-part", data_name="Thorax (Chest)", data_info="The thorax, or chest, is the part of the torso between the neck and the abdomen. It houses the heart and lungs."
         ),
         G( # Lungs
-            Ellipse(cx="85", cy="115", rx="18", ry="25", fill=internal_organ_fill, stroke=internal_organ_stroke, stroke_width=default_stroke_width, fill_opacity=internal_organ_fill_opacity),
-            Ellipse(cx="115", cy="115", rx="18", ry="25", fill=internal_organ_fill, stroke=internal_organ_stroke, stroke_width=default_stroke_width, fill_opacity=internal_organ_fill_opacity),
+            Ellipse(cx=85, cy=115, rx="18", ry="25", fill=internal_organ_fill, stroke=internal_organ_stroke, stroke_width=default_stroke_width, fill_opacity=internal_organ_fill_opacity),
+            Ellipse(cx=115, cy=115, rx="18", ry="25", fill=internal_organ_fill, stroke=internal_organ_stroke, stroke_width=default_stroke_width, fill_opacity=internal_organ_fill_opacity),
             id="lungs_group", cls="body-part internal-organ", data_name="Lungs", data_info="The lungs are the primary organs of the respiratory system, responsible for oxygenating blood."
         ),
         G( # Heart
-            Ellipse(cx="100", cy="120", rx="15", ry="15", style=f"fill: {heart_fill};", stroke=heart_stroke, stroke_width=default_stroke_width, fill_opacity=internal_organ_fill_opacity), # Retain specific heart fill, add stroke
+            Ellipse(cx=100, cy=120, rx="15", ry="15", style=f"fill: {heart_fill};", stroke=heart_stroke, stroke_width=default_stroke_width, fill_opacity=internal_organ_fill_opacity), # Retain specific heart fill, add stroke
             id="heart_group", cls="body-part internal-organ", data_name="Heart", data_info="The heart is a muscular organ that pumps blood throughout the body via the circulatory system."
         ),
         G( # Abdominal and Pelvic Region
-            Rect(x="60", y="160", width="80", height="60", rx="10", fill=default_body_fill, stroke=default_body_stroke, stroke_width=default_stroke_width),
+            Rect(x=60, y=160, width="80", height="60", rx="10", fill=default_body_fill, stroke=default_body_stroke, stroke_width=default_stroke_width),
             id="abdominal_pelvic_region_group", cls="body-part", data_name="Abdominal and Pelvic Region", data_info="This region includes the abdomen and pelvis. It houses major organs of the digestive, urinary, and reproductive systems (e.g., stomach, intestines, liver, kidneys, bladder, reproductive organs)."
         ),
         G( # Left Shoulder
-            Circle(cx="60", cy="95", r="12", fill=default_body_fill, stroke=default_body_stroke, stroke_width=default_stroke_width),
+            Circle(cx=60, cy=95, r="12", fill=default_body_fill, stroke=default_body_stroke, stroke_width=default_stroke_width),
             id="left_shoulder_group", cls="body-part", data_name="Left Shoulder", data_info="The left shoulder joint connects the left arm to the torso."
         ),
         G( # Right Shoulder
-            Circle(cx="140", cy="95", r="12", fill=default_body_fill, stroke=default_body_stroke, stroke_width=default_stroke_width),
+            Circle(cx=140, cy=95, r="12", fill=default_body_fill, stroke=default_body_stroke, stroke_width=default_stroke_width),
             id="right_shoulder_group", cls="body-part", data_name="Right Shoulder", data_info="The right shoulder joint connects the right arm to the torso."
         ),
         G( # Left Arm
-            Rect(x="25", y="95", width="30", height="70", rx="5", fill=default_body_fill, stroke=default_body_stroke, stroke_width=default_stroke_width),
+            Rect(x=25, y=95, width="30", height="70", rx="5", fill=default_body_fill, stroke=default_body_stroke, stroke_width=default_stroke_width),
             id="left_arm_group", cls="body-part", data_name="Left Arm", data_info="The left arm is used for reaching, grasping, and interacting with the environment."
         ),
         G( # Right Arm
-            Rect(x="145", y="95", width="30", height="70", rx="5", fill=default_body_fill, stroke=default_body_stroke, stroke_width=default_stroke_width),
+            Rect(x=145, y=95, width="30", height="70", rx="5", fill=default_body_fill, stroke=default_body_stroke, stroke_width=default_stroke_width),
             id="right_arm_group", cls="body-part", data_name="Right Arm", data_info="The right arm, similar to the left, facilitates interaction and manipulation of objects."
         ),
         G( # Left Hand
-            Ellipse(cx="40", cy="170", rx="12", ry="8", fill=default_body_fill, stroke=default_body_stroke, stroke_width=default_stroke_width),
+            Ellipse(cx=40, cy=170, rx="12", ry="8", fill=default_body_fill, stroke=default_body_stroke, stroke_width=default_stroke_width),
             id="left_hand_group", cls="body-part", data_name="Left Hand", data_info="The left hand is at the end of the left arm, used for manipulation."
         ),
         G( # Right Hand
-            Ellipse(cx="160", cy="170", rx="12", ry="8", fill=default_body_fill, stroke=default_body_stroke, stroke_width=default_stroke_width),
+            Ellipse(cx=160, cy=170, rx="12", ry="8", fill=default_body_fill, stroke=default_body_stroke, stroke_width=default_stroke_width),
             id="right_hand_group", cls="body-part", data_name="Right Hand", data_info="The right hand is at the end of the right arm, used for manipulation."
         ),
         G( # Left Leg
-            Rect(x="70", y="220", width="25", height="70", rx="5", fill=default_body_fill, stroke=default_body_stroke, stroke_width=default_stroke_width),
+            Rect(x=70, y=220, width="25", height="70", rx="5", fill=default_body_fill, stroke=default_body_stroke, stroke_width=default_stroke_width),
             id="left_leg_group", cls="body-part", data_name="Left Leg", data_info="The left leg supports the body and enables locomotion."
         ),
         G( # Right Leg
-            Rect(x="105", y="220", width="25", height="70", rx="5", fill=default_body_fill, stroke=default_body_stroke, stroke_width=default_stroke_width),
+            Rect(x=105, y=220, width="25", height="70", rx="5", fill=default_body_fill, stroke=default_body_stroke, stroke_width=default_stroke_width),
             id="right_leg_group", cls="body-part", data_name="Right Leg", data_info="The right leg provides support and mobility."
         ),
         G( # Left Foot
-            Ellipse(cx="82.5", cy="295", rx="15", ry="8", fill=default_body_fill, stroke=default_body_stroke, stroke_width=default_stroke_width),
+            Ellipse(cx=83, cy=295, rx="15", ry="8", fill=default_body_fill, stroke=default_body_stroke, stroke_width=default_stroke_width),
             id="left_foot_group", cls="body-part", data_name="Left Foot", data_info="The left foot is at the end of the left leg, crucial for standing and walking."
         ),
         G( # Right Foot
-            Ellipse(cx="117.5", cy="295", rx="15", ry="8", fill=default_body_fill, stroke=default_body_stroke, stroke_width=default_stroke_width),
+            Ellipse(cx=118, cy=295, rx="15", ry="8", fill=default_body_fill, stroke=default_body_stroke, stroke_width=default_stroke_width),
             id="right_foot_group", cls="body-part", data_name="Right Foot", data_info="The right foot is at the end of the right leg, crucial for standing and walking."
         ),
         # Main SVG attributes
@@ -224,7 +231,7 @@ main_anatomy_svg_ft = create_main_anatomy_svg()
 
 
 pre_configured_conversation_history = [
-    'Human Message: "I’ve had a sore throat for 3 days."',
+    'Human Message: "I\'ve had a sore throat for 3 days."',
     'AI Message: "Do you also have a fever or cough?"',
     'Human Message: "Yes, I have a mild fever but no cough."',
     'AI Message: "Are you experiencing any difficulty swallowing or swollen glands?"',
@@ -365,7 +372,7 @@ def summarize_medical_images_tool_interface(images: List[dict]) -> str:
         
         if isinstance(response, AIMessage) and response.content:
             print(f"Tool's LLM summarization successful. Summary: {response.content[:100]}...")
-            return response.content
+            return str(response.content)
         else:
             print(f"Tool's LLM summarization did not return expected AIMessage. Response: {response}")
             return "Error: Could not generate a summary from the LLM within the tool."
@@ -471,11 +478,11 @@ def execute_tool_node(state: MedicalAgentState):
         tool_messages.append(
             ToolMessage(content=str(observation), tool_call_id=tool_call["id"], name=tool_name)
         )
-    print(f"Tool observation(s): {[tm.content[:100] + '...' if tm.content else 'N/A' for tm in tool_messages]}")
+    print(f"Tool observation(s): {[str(tm.content)[:100] + '...' if tm.content else 'N/A' for tm in tool_messages]}")
     return {"messages": tool_messages}
 
 # --- Conditional Edge Logic ---
-def should_call_tool(state: MedicalAgentState) -> Literal["execute_tool_node", "__end__"]:
+def should_call_tool(state: MedicalAgentState):
     """
     Determines the next step based on whether the LLM decided to call a tool.
     """
@@ -570,14 +577,21 @@ def body_scanner_commands(state: MedicalAgentState):
     )
     
     try:
-        # result is expected to be an instance of BodyScannerCommand (Pydantic model)
         result = body_scanner_commander_llm.invoke(messages_for_commander_llm)
-        print(f"Body scanner commander LLM result: {result.body_scanner_command if result else 'None'}")
-        command_to_set = result.body_scanner_command if result and hasattr(result, 'body_scanner_command') else "idle"
+        print(f"Body scanner commander LLM result type: {type(result)}")
+        print(f"Body scanner commander LLM result: {result}")
+        
+        # Fix: Access the Pydantic model field directly
+        if result and isinstance(result, BodyScannerCommand):
+            command_to_set = result.body_scanner_command
+        else:
+            command_to_set = "idle"
+            
+        print(f"Body scanner commander LLM result: {command_to_set}")
         return {"body_scanner_command": command_to_set}
     except Exception as e:
-        print(f"Error in body_scanner_commander_llm.ainvoke: {e}")
-        return {"body_scanner_command": "idle"} # Default on error
+        print(f"Error in body_scanner_commander_llm.invoke: {e}")
+        return {"body_scanner_command": "idle"}
 
 
 graph_builder_2.add_node("llm_body_ui_commander", body_scanner_commands)
@@ -651,7 +665,10 @@ Based on a thorough analysis of these inputs, decide on ONE action ('ADD', 'UPDA
 * **Clarity and Conciseness:** Ensure titles and summaries are clear, concise, and accurately reflect the conversation.
 
 Analyze the inputs carefully and generate the single JSON object representing the most appropriate wellness journal operation. YOU CAN RETURN "NONE" IF THERE IS NO NEED TO PUT AN ENTRY
+
 """
+
+
 system_prompt_content_wf_2 = system_prompt_content_wf_1.format(current_date_manila_iso=current_date_manila_iso)
 
 class WellnessJournalOperation(BaseModel):
@@ -815,6 +832,9 @@ async def process_wellness_journal_data(input_payload_for_journal):
     journal_output_process_2 = graph_workflow_2.invoke(input_payload_for_journal)
     actual_journal_operation = journal_output_process_2.get("wellness_journal_operation")
 
+    if actual_journal_operation is None:
+        print("No journal operation to process - actual_journal_operation is None")
+        return None
 
     wellness_journal_final_entries = {
         "wellness_journal_entry_id": actual_journal_operation.wellness_journal_entry_id,
@@ -920,7 +940,7 @@ def render_single_journal_entry_ft(entry_data: dict):
 
 
 
-async def llm_agent_1(user_message: str, attachments_data: list[dict] = None):
+async def llm_agent_1(user_message: str, attachments_data: Optional[list[dict]] = None):
     """
     Processes the user message and optional image attachments,
     invokes the LangGraph agent, and returns the final response.
@@ -932,38 +952,29 @@ async def llm_agent_1(user_message: str, attachments_data: list[dict] = None):
     if attachments_data:
         print(f"Number of attachments: {len(attachments_data)}")
 
-    message_content_parts = [{"type": "text", "text": user_message}]
-    # This list will store dicts: {"data": base64_string, "media_type": "image_type"}
-    # This is what the 'input_base64_images' field in the state will hold.
+    message_content_parts: List[dict] = [{"type": "text", "text": user_message}]
     image_details_for_state_and_tool: List[dict] = [] 
 
     if attachments_data:
         for att_data in attachments_data:
-            # Directly access keys based on the expected structure of att_data
-            b64_string = att_data.get("base64")
-            # 'content_type' from att_data is the media_type
-            media_type = att_data.get("content_type", "image/jpeg") # Default if 'content_type' is missing
 
-            if b64_string: # Ensure there's actual base64 data
-                # Part 1: For the HumanMessage content list (sent to the main agent LLM)
+            b64_string = att_data.get("base64")
+            media_type = att_data.get("content_type", "image/jpeg")
+
+            if b64_string:
                 message_content_parts.append({
                     "type": "image",
                     "source": {"type": "base64", "media_type": media_type, "data": b64_string}
                 })
-                
-                # Part 2: For the 'input_base64_images' field in the agent state,
-                # which will be passed as an argument to the summarization tool.
+
                 image_details_for_state_and_tool.append({"data": b64_string, "media_type": media_type})
     
-    # The initial_messages list will now only contain the HumanMessage.
-    # The SystemMessage for Akasi.ai persona is handled within the decide_action_node.
-    config = {"configurable": {"thread_id": "1"}}
-    initial_messages: List[BaseMessage] = [
-        HumanMessage(content=message_content_parts)
-    ]
+
+    config = cast(Any, {"configurable": {"thread_id": "1"}})
+    initial_messages = HumanMessage(content=cast(Any, message_content_parts))
     
     initial_graph_state = {
-        "messages": initial_messages,
+        "messages": [initial_messages],  # Wrap single message in a list
         "input_base64_images": image_details_for_state_and_tool if image_details_for_state_and_tool else None,
     }
 
@@ -1045,7 +1056,7 @@ async def llm_agent_1(user_message: str, attachments_data: list[dict] = None):
 
 
 
-def unified_ui_controller_for_chat_window_and_body_scanner(llm_data: dict, user_message_text: str, bubble_id: str = None):
+def unified_ui_controller_for_chat_window_and_body_scanner(llm_data: dict, user_message_text: str, bubble_id: Optional[str] = None):
     """
     Processes LLM data to generate UI updates (primarily AI chat bubble).
     Prints other data for now.
@@ -1342,7 +1353,7 @@ async def get_ai_actual_response_route(req, sess):
 
 
 @rt('/onboarding/wellness-journal')
-def get(auth):
+def wellness_journal_page(auth):
     if auth is None:
         return RedirectResponse('/login', status_code=303)
 
@@ -1395,7 +1406,7 @@ def get(auth):
                     cls="avatar placeholder p-0 w-8 h-8 rounded-full mr-2 bg-base-300"
                 ),
                 Div(
-                    P("Hi there! Im Akasi, your personal wellness assistant. I help you track your health by building a wellness journal. I’ve activated my body scanner to check how you're doing. Just start by telling me how you feel today. You can also add notes, symptoms, photos, or any medical documents along the way. Lets begin!", cls="text-sm leading-relaxed chat-message-text"),
+                    P("Hi there! Im Akasi, your personal wellness assistant. I help you track your health by building a wellness journal. I've activated my body scanner to check how you're doing. Just start by telling me how you feel today. You can also add notes, symptoms, photos, or any medical documents along the way. Lets begin!", cls="text-sm leading-relaxed chat-message-text"),
                     cls="chat-bubble chat-bubble-neutral bg-base-300 text-base-content rounded-bl-none shadow-md"
                 ),
                 cls="flex items-end max-w-xs sm:max-w-md md:max-w-lg"
@@ -1996,7 +2007,7 @@ def post_finalize_journal():
 
 # Landing Page
 @rt('/')
-def get():
+def index():
     landing_script = Script(src='/js/landing_animation.js', defer=True)
     landing_css = Link(rel='stylesheet', href='/css/landing_page.css')
     nav_bar = Div(
@@ -2058,7 +2069,7 @@ def get():
 
 
 @rt('/signup')
-def get(sess):
+def signup_page(sess):
     auth = sess.get('user', None) # Adjust session key as per your application
     if auth:
         return RedirectResponse('/home', status_code=303) # Adjust redirect URL as needed
@@ -2206,12 +2217,12 @@ def get(sess):
 
 
 @rt('/signup')
-async def post(req, sess):
+async def signup_submit(req, sess):
     form = await parse_form(req)
     # Match field names to the new form: fullName, email, password, confirmPassword, terms
-    display_name = form.get('fullName') # Changed from 'display_name' to 'fullName'
-    email = form.get('email')
-    password = form.get('password')
+    display_name = str(form.get('fullName', '')) # Changed from 'display_name' to 'fullName'
+    email = str(form.get('email', ''))
+    password = str(form.get('password', ''))
     # confirm_password = form.get('confirmPassword') # You might want to use this in validation
     # terms_agreed = form.get('terms') # You might want to check this
 
@@ -2223,18 +2234,19 @@ async def post(req, sess):
         res = supabase.auth.sign_up({"email": email, "password": password, 
                                      "options": {"data": {"full_name": display_name}} # Example of passing additional data
                                     })
-        if res.user:
+        if res.user and res.session:
             user = res.user
+            session = res.session
             
             sess['user'] = {
                 'id': user.id, 
                 'email': user.email,
                 'display_name': display_name, # Storing the display_name/fullName
-                'access_token': res.session.access_token,
-                'refresh_token': res.session.refresh_token
+                'access_token': session.access_token,
+                'refresh_token': session.refresh_token
             }
             
-            auth_client = use_auth_context(res.session.access_token, res.session.refresh_token)
+            auth_client = use_auth_context(session.access_token, session.refresh_token)
                                     
             return RedirectResponse('/onboarding/personal-info', status_code=303)
         else:
@@ -2242,8 +2254,8 @@ async def post(req, sess):
             # Or if res.user is None for some other reason (e.g., email confirmation required)
             # Re-render form with a generic error or a specific one if available from `res`
             error_message = "Signup was not successful. Please try again."
-            if hasattr(res, 'error') and res.error:
-                error_message = res.error.message
+            # Note: Supabase AuthResponse doesn't have an 'error' attribute in type annotations
+            # Errors are typically handled via exceptions
             # Fall through to the general exception handling below by raising an exception
             raise Exception(error_message) 
             
@@ -2373,7 +2385,7 @@ async def post(req, sess):
         )
 
 @rt('/login')
-def get(sess):
+def login_page(sess):
     auth = sess.get('user', None) # Adjust session key as per your application
     if auth:
         return RedirectResponse('/home', status_code=303) # Adjust redirect URL as needed
@@ -2506,26 +2518,32 @@ def get_onboarding_redirect(onboarding_step):
 
 
 @rt('/login') 
-async def post(req, sess): # Changed to req, sess to match common FastHTML patterns
+async def login_submit(req, sess): # Changed to req, sess to match common FastHTML patterns
     form = await parse_form(req)
-    email = form.get('email')
-    password = form.get('password')
+    email = str(form.get('email', ''))
+    password = str(form.get('password', ''))
     
     try:
         # User's existing Supabase login logic - REMAINS UNCHANGED
         res = supabase.auth.sign_in_with_password({"email": email, "password": password})
         
+        if not res.user or not res.session:
+            raise Exception("Authentication failed - no user or session returned")
+            
+        user = res.user
+        session = res.session
+        
         sess['user'] = {
-            'id': res.user.id, 
-            'email': res.user.email,
-            'access_token': res.session.access_token,
-            'refresh_token': res.session.refresh_token
+            'id': user.id, 
+            'email': user.email,
+            'access_token': session.access_token,
+            'refresh_token': session.refresh_token
         }
         
-        auth_client = use_auth_context(res.session.access_token, res.session.refresh_token)
+        auth_client = use_auth_context(session.access_token, session.refresh_token)
         
         try:
-            user_profile = fetch_user_profile(auth_client, res.user.id)
+            user_profile = fetch_user_profile(auth_client, user.id)
             current_onboarding_step = user_profile.get('onboarding_step', 'personal_info')
         except Exception as e:
             print(f"Error fetching profile: {str(e)}")
@@ -2756,7 +2774,7 @@ variation1_script_content = """
 """
 
 @rt('/onboarding/personal-info')
-def get(auth): 
+def personal_info_page(auth): 
     if auth is None: 
         return RedirectResponse('/login', status_code=303)
     
@@ -2899,7 +2917,7 @@ def form_view(auth):
 
 
 @rt('/onboarding/personal-info')
-async def post(request, auth):
+async def personal_info_submit(request, auth):
     if auth is None: return RedirectResponse('/login', status_code=303)
     
     form = await parse_form(request)
@@ -3046,7 +3064,7 @@ document.addEventListener('DOMContentLoaded', () => {
 """
 
 @rt('/home')
-def get(auth):
+def home_page(auth):
     if auth is None: return RedirectResponse('/login', status_code=303)
     
     user_name = auth.get('display_name', 'Test User') 

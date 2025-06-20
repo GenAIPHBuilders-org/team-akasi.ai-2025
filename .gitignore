@@ -19,3 +19,9 @@ __pycache__/
 *.env
 .vscode/
 .sesskey
+
+# Cursor IDE folder
+.cursor/
+
+# Static files
+static/
