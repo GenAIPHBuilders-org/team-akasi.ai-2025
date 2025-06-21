@@ -228,6 +228,8 @@ def create_main_anatomy_svg():
         cls="object-contain w-full h-full p-2", 
         style="position: relative; z-index: 2; background-color: #f8fafc; border: 1px solid #e2e8f0;" 
     )
+
+
 main_anatomy_svg_ft = create_main_anatomy_svg()
 
 
@@ -2289,122 +2291,253 @@ async def signup_submit(req, sess):
             signup_layout_wrapper
         )
 
-@rt('/login')
-def login_page(sess):
-    auth = sess.get('user', None) # Adjust session key as per your application
+
+
+
+@rt('/login', methods=['GET'])
+def login_get(sess):
+    auth = sess.get('user', None)
     if auth:
-        return RedirectResponse('/home', status_code=303) # Adjust redirect URL as needed
+        return RedirectResponse('/home', status_code=303)
 
-    # --- Logo and Site Name Section ---
-    logo_section = Div(
-        A( 
-            Div( 
-                Span('A', cls='text-2xl text-white font-bold'),
-                cls='w-16 h-16 rounded-full bg-gradient-to-br from-teal-400 via-cyan-500 to-sky-600 flex items-center justify-center shadow-lg'
+    # --- Left Side: Brand & Information Section ---
+    left_side_header = Div(
+        # Logo with heart icon
+        Div(
+            Div(
+                Span("favorite", cls="material-icons text-3xl text-white"),
+                cls="bg-white/20 backdrop-blur-sm rounded-xl p-4 mr-6 flex items-center justify-center"
             ),
-            Span('Akasi.ai', cls='ml-3 text-2xl font-semibold text-gray-700'), 
-            href="/", 
-            cls='flex items-center justify-center' 
+            Div(
+                H1("Akasi.ai", cls="text-3xl font-bold text-white"),
+                P("Your AI Health Guardian of", cls="text-base text-white/90"),
+                P("Health and Wellness", cls="text-base text-white/90"),
+                cls="flex flex-col"
+            ),
+            cls="flex items-center justify-center mb-12"
         ),
-        cls='mb-6' 
+        
+        # Main heading
+        H1("Bringing Order to Health Management", cls="text-4xl font-bold text-white mb-6 leading-tight text-center"),
+        
+        # Subtitle
+        P("Empowering Filipinos with AI-powered health insights, medication tracking, and personalized care for better chronic condition management.", 
+          cls="text-white/90 text-lg mb-12 leading-relaxed text-center"),
+        
+        cls="mb-16"
     )
 
-    # --- Form Input Group: Email ---
-    email_input_group = Div(
+    # How it works section
+    how_it_works_section = Div(
+        Div(
+            H2("How Akasi.ai Works", cls="text-2xl font-semibold text-white mb-8 text-center"),
+            
+            # Features in single row
+            Div(
+                # Share Your Health Data
+                Div(
+                    Div(
+                        Span("person", cls="material-icons text-2xl text-white"),
+                        cls="w-12 h-12 rounded-full bg-white/20 flex items-center justify-center mb-3 mx-auto"
+                    ),
+                    H3("Share Your Health Data", cls="text-white font-semibold mb-2 text-xs"),
+                    P("Enter symptoms, medications, and health goals", cls="text-white/80 text-xs leading-tight"),
+                    cls="text-center flex-1"
+                ),
+                
+                # AI Processing
+                Div(
+                    Div(
+                        Span("storage", cls="material-icons text-2xl text-white"),
+                        cls="w-12 h-12 rounded-full bg-white/20 flex items-center justify-center mb-3 mx-auto"
+                    ),
+                    H3("AI Processing", cls="text-white font-semibold mb-2 text-xs"),
+                    P("Akasi analyzes your information", cls="text-white/80 text-xs leading-tight"),
+                    cls="text-center flex-1"
+                ),
+                
+                # Smart Insights
+                Div(
+                    Div(
+                        Span("settings", cls="material-icons text-2xl text-white"),
+                        cls="w-12 h-12 rounded-full bg-white/20 flex items-center justify-center mb-3 mx-auto"
+                    ),
+                    H3("Smart Insights", cls="text-white font-semibold mb-2 text-xs"),
+                    P("Get personalized health recommendations", cls="text-white/80 text-xs leading-tight"),
+                    cls="text-center flex-1"
+                ),
+                
+                # Ongoing Care
+                Div(
+                    Div(
+                        Span("notifications", cls="material-icons text-2xl text-white"),
+                        cls="w-12 h-12 rounded-full bg-white/20 flex items-center justify-center mb-3 mx-auto"
+                    ),
+                    H3("Ongoing Care", cls="text-white font-semibold mb-2 text-xs"),
+                    P("Continuous monitoring, track progress", cls="text-white/80 text-xs leading-tight"),
+                    cls="text-center flex-1"
+                ),
+                
+                cls="flex justify-center items-start gap-4"
+            ),
+            cls="bg-white/10 rounded-lg p-6 max-w-2xl mx-auto"
+        ),
+        cls="mb-8"
+    )
+
+    # Security notice section (separate from how_it_works)
+    security_notice_section = Div(
+        Span("lock", cls="material-icons text-yellow-300 mr-2"),
+        Span("Your health data is secure and compliant with healthcare privacy standards", cls="text-white/90 text-sm"),
+        cls="flex items-center justify-center bg-white/10 rounded-lg p-4 mt-35 max-w-2xl mx-auto"
+    )
+
+    left_side = Div(
+        Div(
+            left_side_header,
+            how_it_works_section,
+            security_notice_section,
+            cls="max-w-2xl mx-auto text-center"
+        ),
+        cls="w-full lg:w-1/2 bg-gradient-to-br from-blue-700 via-cyan-600 to-emerald-600 p-12 flex flex-col justify-center min-h-screen"
+    )
+
+    # --- Right Side: Login Form ---
+    # Logo section for right side
+    right_logo = Div(
+        Span("favorite", cls="material-icons text-2xl text-teal-600 mr-2"),
+        Span("Akasi.ai", cls="text-xl font-semibold text-gray-800"),
+        cls="flex items-center justify-center mb-8"
+    )
+
+    # Welcome section
+    welcome_section = Div(
+        H1("Welcome Back", cls="text-3xl font-bold text-gray-900 mb-2"),
+        P("Sign in to your health management dashboard", cls="text-gray-600 mb-8"),
+        cls="text-center"
+    )
+
+    # Sign in form section
+    form_header = Div(
+        H2("Sign In", cls="text-xl font-semibold text-gray-900 mb-2"),
+        P("Continue your health journey with personalized insights", cls="text-gray-600 mb-6"),
+        cls="mb-6"
+    )
+
+    # Email input
+    email_input = Div(
         Label(
-            Span('Email Address', cls='label-text text-gray-700'),
-            For='email', 
-            cls='label'
+            Span("Email Address", cls="label-text text-gray-700"),
+            For="email",
+            cls="label"
         ),
-        Input(type='email', id='email', name='email', placeholder='you@example.com',
-              cls='input input-bordered input-primary w-full focus:ring-teal-500 focus:border-teal-500', required=True)
+        Input(
+            type="email", 
+            id="email",
+            name="email", 
+            placeholder="your.email@example.com",
+            cls="input input-bordered input-primary w-full focus:ring-teal-500 focus:border-teal-500",
+            required=True
+        ),
+        cls="form-control mb-4"
     )
 
-    # --- Form Input Group: Password ---
-    password_input_group = Div(
+    # Password input
+    password_input = Div(
         Label(
-            Span('Password', cls='label-text text-gray-700'),
-            For='password', 
-            cls='label'
+            Span("Password", cls="label-text text-gray-700"),
+            For="password",
+            cls="label"
         ),
-        Input(type='password', id='password', name='password', placeholder='••••••••',
-              cls='input input-bordered input-primary w-full focus:ring-teal-500 focus:border-teal-500', required=True)
+        Input(
+            type="password", 
+            id="password",
+            name="password", 
+            placeholder="Enter your password",
+            cls="input input-bordered input-primary w-full focus:ring-teal-500 focus:border-teal-500",
+            required=True
+        ),
+        cls="form-control mb-4"
     )
 
-    # --- Remember Me & Forgot Password Section ---
-    remember_forgot_section = Div(
-        Div( 
+    # Remember me and forgot password
+    remember_forgot = Div(
+        Div(
             Label(
-                Input(type='checkbox', name='remember', cls='checkbox checkbox-primary checkbox-sm'),
-                Span('Remember me', cls='label-text text-gray-600'),
-                cls='label cursor-pointer gap-2' 
+                Input(type="checkbox", name="remember", cls="checkbox checkbox-primary checkbox-sm"),
+                Span("Remember me", cls="label-text text-gray-600"),
+                cls="label cursor-pointer gap-2"
             ),
-            cls='form-control' 
+            cls="form-control"
         ),
-        A('Forgot password?', href='#', cls='link link-hover text-teal-600 hover:text-teal-700'), 
-        cls='flex items-center justify-between text-sm mt-2' 
+        A("Forgot password?", href="#", cls="link link-hover text-teal-600 hover:text-teal-700"),
+        cls="flex items-center justify-between text-sm mt-2"
     )
 
-    # --- Submit Button Section ---
-    submit_button_section = Div(
-        Button('Log In', type='submit',
-               cls='btn btn-primary bg-teal-600 hover:bg-teal-700 border-none text-white w-full text-lg'),
-        cls='card-actions justify-center w-full mt-6' 
-    )
-
-    # --- Login Form Structure (combining all form elements) ---
-    login_form_structure = Form(
-        email_input_group,
-        password_input_group,
-        remember_forgot_section,
-        submit_button_section,
-        cls='w-full space-y-4', 
-        method="post",         
-        action="/login"         
-    )
-
-    # --- Sign Up Link Section ---
-    signup_link_structure = Div(
-        P(
-            "Don't have an account? ", 
-            A('Sign up here', href='/signup', cls='link link-hover text-teal-600 hover:text-teal-700 font-semibold'), 
-            cls='text-gray-600' 
+    # Sign in button
+    signin_button = Div(
+        Button(
+            "Sign In",
+            type="submit",
+            cls="btn btn-primary bg-teal-600 hover:bg-teal-700 border-none text-white w-full text-lg"
         ),
-        cls='mt-6 text-center text-sm' 
+        cls="card-actions justify-center w-full mt-6"
     )
 
-    # --- Card Body Content (combining all elements within the card) ---
-    card_body_structure = Div(
-        logo_section,
-        H2('Welcome Back!', cls='card-title text-2xl md:text-3xl font-bold mb-1 text-gray-800'), 
-        P('Please enter your details to log in.', cls='text-gray-500 mb-6'), 
-        login_form_structure, 
-        signup_link_structure, 
-        cls='card-body items-center text-center p-8 md:p-12' 
+    # Sign up link
+    signup_link = P(
+        "Don't have an account? ",
+        A("Sign up for free", href="/signup", cls="text-teal-600 hover:text-teal-700 font-medium"),
+        cls="text-center text-sm text-gray-600 mt-6"
     )
 
-    # --- Main Login Card Element ---
-    login_page_main_content = Main( 
-        card_body_structure,
-        cls='card w-full max-w-md bg-base-100 shadow-xl' 
+    # Login form
+    login_form = Form(
+        form_header,
+        email_input,
+        password_input,
+        remember_forgot,
+        signin_button,
+        signup_link,
+        method="post",
+        action="/login",
+        cls="w-full max-w-md"
     )
 
-    # --- Footer Element ---
-    login_page_footer = Footer(
-        '© 2025 Akasi.ai. All rights reserved.', 
-        cls='text-center mt-8 text-xs text-gray-500' 
+    # Health tip
+    health_tip = Div(
+        Div(
+            Span("lightbulb", cls="material-icons text-lg mr-2 text-blue-600"),
+            Span("Health Tip:", cls="font-medium text-blue-800 mr-1"),
+            Span("Regular monitoring of your health metrics can help prevent chronic conditions and improve your quality of life.", 
+                 cls="text-blue-700 text-sm"),
+            cls="flex items-start"
+        ),
+        cls="bg-blue-50 border border-blue-200 rounded-lg p-4 mt-8 max-w-md"
     )
 
-    login_layout_wrapper = Div(
-        login_page_main_content,
-        login_page_footer,
-        cls="flex flex-col items-center justify-center w-full min-h-screen px-4 py-8"
+    right_side = Div(
+        Div(
+            right_logo,
+            welcome_section,
+            login_form,
+            health_tip,
+            cls="w-full max-w-md mx-auto"
+        ),
+        cls="w-full lg:w-1/2 bg-gray-50 p-12 flex flex-col justify-center min-h-screen"
     )
 
+    # Main layout
+    main_layout = Div(
+        left_side,
+        right_side,
+        cls="flex flex-col lg:flex-row min-h-screen"
+    )
 
     return (
-        Title("Login - Akasi.ai"), 
-        login_layout_wrapper      
+        Title("Login - Akasi.ai"),
+        Link(href="https://fonts.googleapis.com/icon?family=Material+Icons", rel="stylesheet"),
+        main_layout
     )
 
 
@@ -2422,11 +2555,12 @@ def get_onboarding_redirect(onboarding_step):
 
 
 
-@rt('/login') 
-async def login_submit(req, sess): # Changed to req, sess to match common FastHTML patterns
+@rt('/login', methods=['POST']) 
+async def login_post(req, sess): # Changed to req, sess to match common FastHTML patterns
     form = await parse_form(req)
     email = str(form.get('email', ''))
     password = str(form.get('password', ''))
+    print(form)
     
     try:
         # User's existing Supabase login logic - REMAINS UNCHANGED
@@ -2477,108 +2611,258 @@ async def login_submit(req, sess): # Changed to req, sess to match common FastHT
             cls='mb-6' 
         )
 
-        # --- Form Input Group: Email (pre-filled) ---
-        email_input_group = Div(
-            Label(
-                Span('Email Address', cls='label-text text-gray-700'),
-                For='email', # Matches the ID in the GET route
-                cls='label'
-            ),
-            Input(type='email', id='email', name='email', placeholder='you@example.com',
-                  cls='input input-bordered input-primary w-full focus:ring-teal-500 focus:border-teal-500', 
-                  required=True,
-                  value=email or '' # Pre-fill email if available
-            )
+        # --- Error Message for New Layout ---
+        error_alert = Div(
+            Span("warning", cls="material-icons text-lg mr-2 text-red-600"),
+            Span(f"{str(e)}", cls="text-red-700"),
+            cls="bg-red-50 border border-red-200 rounded-lg p-4 mb-6 flex items-center text-sm"
         )
 
-        # --- Form Input Group: Password ---
-        password_input_group = Div(
-            Label(
-                Span('Password', cls='label-text text-gray-700'),
-                For='password', # Matches the ID in the GET route
-                cls='label'
-            ),
-            Input(type='password', id='password', name='password', placeholder='••••••••',
-                  cls='input input-bordered input-primary w-full focus:ring-teal-500 focus:border-teal-500', required=True)
+        # --- Right Side with Error: Login Form ---
+        right_logo = Div(
+            Span("favorite", cls="material-icons text-2xl text-teal-600 mr-2"),
+            Span("Akasi.ai", cls="text-xl font-semibold text-gray-800"),
+            cls="flex items-center justify-center mb-8"
         )
 
-        # --- Remember Me & Forgot Password Section ---
-        remember_forgot_section = Div(
-            Div( 
+        welcome_section = Div(
+            H1("Welcome Back", cls="text-3xl font-bold text-gray-900 mb-2"),
+            P("Sign in to your health management dashboard", cls="text-gray-600 mb-8"),
+            cls="text-center"
+        )
+
+        form_header = Div(
+            H2("Sign In", cls="text-xl font-semibold text-gray-900 mb-2"),
+            P("Continue your health journey with personalized insights", cls="text-gray-600 mb-6"),
+            cls="mb-6"
+        )
+
+        # Email input (pre-filled)
+        email_input = Div(
+            Label(
+                Span("Email Address", cls="label-text text-gray-700"),
+                For="email",
+                cls="label"
+            ),
+            Input(
+                type="email", 
+                id="email",
+                name="email", 
+                placeholder="your.email@example.com",
+                value=email or '',
+                cls="input input-bordered input-primary w-full focus:ring-teal-500 focus:border-teal-500",
+                required=True
+            ),
+            cls="form-control mb-4"
+        )
+
+        # Password input
+        password_input = Div(
+            Label(
+                Span("Password", cls="label-text text-gray-700"),
+                For="password",
+                cls="label"
+            ),
+            Input(
+                type="password", 
+                id="password",
+                name="password", 
+                placeholder="Enter your password",
+                cls="input input-bordered input-primary w-full focus:ring-teal-500 focus:border-teal-500",
+                required=True
+            ),
+            cls="form-control mb-4"
+        )
+
+        # Remember me and forgot password
+        remember_forgot = Div(
+            Div(
                 Label(
-                    Input(type='checkbox', name='remember', cls='checkbox checkbox-primary checkbox-sm'),
-                    Span('Remember me', cls='label-text text-gray-600'),
-                    cls='label cursor-pointer gap-2' 
+                    Input(type="checkbox", name="remember", cls="checkbox checkbox-primary checkbox-sm"),
+                    Span("Remember me", cls="label-text text-gray-600"),
+                    cls="label cursor-pointer gap-2"
                 ),
-                cls='form-control' 
+                cls="form-control"
             ),
-            A('Forgot password?', href='#', cls='link link-hover text-teal-600 hover:text-teal-700'), 
-            cls='flex items-center justify-between text-sm mt-2' 
+            A("Forgot password?", href="#", cls="link link-hover text-teal-600 hover:text-teal-700"),
+            cls="flex items-center justify-between text-sm mt-2"
         )
 
-        # --- Submit Button Section ---
-        submit_button_section = Div(
-            Button('Log In', type='submit',
-                   cls='btn btn-primary bg-teal-600 hover:bg-teal-700 border-none text-white w-full text-lg'),
-            cls='card-actions justify-center w-full mt-6' 
-        )
-
-        # --- Login Form Structure ---
-        login_form_structure = Form(
-            email_input_group,
-            password_input_group,
-            remember_forgot_section,
-            submit_button_section,
-            cls='w-full space-y-4', 
-            method="post",         
-            action="/login"         
-        )
-
-        # --- Sign Up Link Section ---
-        signup_link_structure = Div(
-            P(
-                "Don't have an account? ", 
-                A('Sign up here', href='#', cls='link link-hover text-teal-600 hover:text-teal-700 font-semibold'), 
-                cls='text-gray-600' 
+        # Sign in button
+        signin_button = Div(
+            Button(
+                "Sign In",
+                type="submit",
+                cls="btn btn-primary bg-teal-600 hover:bg-teal-700 border-none text-white w-full text-lg"
             ),
-            cls='mt-6 text-center text-sm' 
+            cls="card-actions justify-center w-full mt-6"
         )
 
-        # --- Card Body Content (with error message inserted) ---
-        card_body_structure = Div(
-            logo_section,
-            H2('Welcome Back!', cls='card-title text-2xl md:text-3xl font-bold mb-1 text-gray-800'), 
-            P('Please enter your details to log in.', cls='text-gray-500 mb-2'), # Adjusted margin
-            error_message_component, # Insert the error message here
-            login_form_structure, 
-            signup_link_structure, 
-            cls='card-body items-center text-center p-8 md:p-12' 
+        # Sign up link
+        signup_link = P(
+            "Don't have an account? ",
+            A("Sign up for free", href="/signup", cls="text-teal-600 hover:text-teal-700 font-medium"),
+            cls="text-center text-sm text-gray-600 mt-6"
         )
 
-        # --- Main Login Card Element ---
-        login_page_main_content = Main( 
-            card_body_structure,
-            cls='card w-full max-w-md bg-base-100 shadow-xl' 
+        # Login form with error
+        login_form_with_error = Form(
+            form_header,
+            error_alert,  # Insert error message
+            email_input,
+            password_input,
+            remember_forgot,
+            signin_button,
+            signup_link,
+            method="post",
+            action="/login",
+            cls="w-full max-w-md"
         )
 
-        # --- Footer Element ---
-        login_page_footer = Footer(
-            '© 2024 Akasi.ai. All rights reserved.', 
-            cls='text-center mt-8 text-xs text-gray-500' 
+        # Health tip
+        health_tip = Div(
+            Div(
+                Span("lightbulb", cls="material-icons text-lg mr-2 text-blue-600"),
+                Span("Health Tip:", cls="font-medium text-blue-800 mr-1"),
+                Span("Regular monitoring of your health metrics can help prevent chronic conditions and improve your quality of life.", 
+                     cls="text-blue-700 text-sm"),
+                cls="flex items-start"
+            ),
+            cls="bg-blue-50 border border-blue-200 rounded-lg p-4 mt-8 max-w-md"
         )
 
-        # --- Layout Wrapper for Centering (same as GET route) ---
-        login_layout_wrapper = Div(
-            login_page_main_content,
-            login_page_footer,
-            cls="flex flex-col items-center justify-center w-full min-h-screen px-4 py-8"
+        # Use the exact same left_side_header as GET route
+        left_side_header = Div(
+            # Logo with heart icon
+            Div(
+                Div(
+                    Span("favorite", cls="material-icons text-3xl text-white"),
+                    cls="bg-white/20 backdrop-blur-sm rounded-xl p-4 mr-6 flex items-center justify-center"
+                ),
+                Div(
+                    H1("Akasi.ai", cls="text-3xl font-bold text-white"),
+                    P("Your AI Health Guardian of", cls="text-base text-white/90"),
+                    P("Health and Wellness", cls="text-base text-white/90"),
+                    cls="flex flex-col"
+                ),
+                cls="flex items-center justify-center mb-12"
+            ),
+            
+            # Main heading
+            H1("Bringing Order to Health Management", cls="text-4xl font-bold text-white mb-6 leading-tight text-center"),
+            
+            # Subtitle
+            P("Empowering Filipinos with AI-powered health insights, medication tracking, and personalized care for better chronic condition management.", 
+              cls="text-white/90 text-lg mb-12 leading-relaxed text-center"),
+            
+            cls="mb-16"
+        )
+
+        # Use the exact same how_it_works_section as GET route
+        how_it_works_section = Div(
+            Div(
+                H2("How Akasi.ai Works", cls="text-2xl font-semibold text-white mb-8 text-center"),
+                
+                # Features in single row
+                Div(
+                    # Share Your Health Data
+                    Div(
+                        Div(
+                            Span("person", cls="material-icons text-2xl text-white"),
+                            cls="w-12 h-12 rounded-full bg-white/20 flex items-center justify-center mb-3 mx-auto"
+                        ),
+                        H3("Share Your Health Data", cls="text-white font-semibold mb-2 text-xs"),
+                        P("Enter symptoms, medications, and health goals", cls="text-white/80 text-xs leading-tight"),
+                        cls="text-center flex-1"
+                    ),
+                    
+                    # AI Processing
+                    Div(
+                        Div(
+                            Span("storage", cls="material-icons text-2xl text-white"),
+                            cls="w-12 h-12 rounded-full bg-white/20 flex items-center justify-center mb-3 mx-auto"
+                        ),
+                        H3("AI Processing", cls="text-white font-semibold mb-2 text-xs"),
+                        P("Akasi analyzes your information", cls="text-white/80 text-xs leading-tight"),
+                        cls="text-center flex-1"
+                    ),
+                    
+                    # Smart Insights
+                    Div(
+                        Div(
+                            Span("settings", cls="material-icons text-2xl text-white"),
+                            cls="w-12 h-12 rounded-full bg-white/20 flex items-center justify-center mb-3 mx-auto"
+                        ),
+                        H3("Smart Insights", cls="text-white font-semibold mb-2 text-xs"),
+                        P("Get personalized health recommendations", cls="text-white/80 text-xs leading-tight"),
+                        cls="text-center flex-1"
+                    ),
+                    
+                    # Ongoing Care
+                    Div(
+                        Div(
+                            Span("notifications", cls="material-icons text-2xl text-white"),
+                            cls="w-12 h-12 rounded-full bg-white/20 flex items-center justify-center mb-3 mx-auto"
+                        ),
+                        H3("Ongoing Care", cls="text-white font-semibold mb-2 text-xs"),
+                        P("Continuous monitoring, track progress", cls="text-white/80 text-xs leading-tight"),
+                        cls="text-center flex-1"
+                    ),
+                    
+                    cls="flex justify-center items-start gap-4"
+                ),
+                cls="bg-white/10 rounded-lg p-6 max-w-2xl mx-auto"
+            ),
+            cls="mb-8"
+        )
+
+        # Security notice section (separate from how_it_works)
+        # Security notice section (same as GET route)
+        security_notice_section = Div(
+            Span("lock", cls="material-icons text-yellow-300 mr-2"),
+            Span("Your health data is secure and compliant with healthcare privacy standards", cls="text-white/90 text-sm"),
+            cls="flex items-center justify-center bg-white/10 rounded-lg p-4 mt-35 max-w-2xl mx-auto"
+        )
+
+        left_side = Div(
+            Div(
+                left_side_header,
+                how_it_works_section,
+                security_notice_section,
+                cls="max-w-2xl mx-auto text-center"
+            ),
+            cls="w-full lg:w-1/2 bg-gradient-to-br from-blue-700 via-cyan-600 to-emerald-600 p-12 flex flex-col justify-center min-h-screen"
+        )
+
+        right_side = Div(
+            Div(
+                right_logo,
+                welcome_section,
+                login_form_with_error,
+                health_tip,
+                cls="w-full max-w-md mx-auto"
+            ),
+            cls="w-full lg:w-1/2 bg-gray-50 p-12 flex flex-col justify-center min-h-screen"
+        )
+
+        # Main layout with error
+        main_layout_with_error = Div(
+            left_side,
+            right_side,
+            cls="flex flex-col lg:flex-row min-h-screen"
         )
 
         # Return the full page structure with the error
         return (
             Title("Login Error - Akasi.ai"), 
-            login_layout_wrapper
+            Link(href="https://fonts.googleapis.com/icon?family=Material+Icons", rel="stylesheet"),
+            main_layout_with_error
         )
+
+
+
+
+
 
 # --- CSS for Animations and Specific Styles ---
 onboarding_styles_content = """
