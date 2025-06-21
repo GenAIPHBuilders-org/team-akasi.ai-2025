@@ -59,6 +59,9 @@ supabase: Client = create_client(supabase_url, supabase_anon_key)
 pending_journal_updates: List[dict] = []
 pending_journal_updates_2: List[dict] = []
 
+# --- Global Chat History Store ---
+# CHAT_HISTORY removed - chat history now handled entirely client-side
+
 # Define Manila timezone (UTC+8)
 manila_timezone = timezone(timedelta(hours=8))
 current_date_manila_iso = datetime.now(manila_timezone).isoformat()
@@ -1326,60 +1329,23 @@ def wellness_journal_page(auth):
         cls="flex-grow p-3 sm:p-4 space-y-3 overflow-y-auto bg-base-200 scrollbar-thin"
     )
 
-    chat_input_area = Div(
-        Div(id="stagedAttachmentsContainer", 
-            cls="mb-2 p-2 border border-base-300 rounded-lg bg-base-200 max-h-32 overflow-y-auto scrollbar-thin space-y-2 hidden" 
-
+    chat_input_area = Form(
+        Textarea(
+            id="chat-input",
+            name="message",
+            placeholder="Type your response...",
+            cls="chat-input"
         ),
-        Div(
-
-            Div(
-                Button(
-
-                    
-                    Span("add", cls="material-icons emoji-icon text-2xl"),
-                    id="attachmentButton", tabindex="0", role="button", title="Attach files",
-                    cls="btn btn-ghost btn-circle text-primary"
-                ),
-                Div( 
-                    Button(Span("image", cls="material-icons emoji-icon"), " Attach Image(s)", id="attachImageButton", cls="btn btn-sm btn-ghost justify-start gap-2"),
-                    Button(Span("article", cls="material-icons emoji-icon"), " Attach Document(s)", id="attachDocumentButton", cls="btn btn-sm btn-ghost justify-start gap-2"),
-                    id="attachmentOptionsContent", tabindex="0",
-                    cls="dropdown-content z-[20] menu p-2 shadow bg-base-100 rounded-box w-56 mb-2"
-                ),
-                id="attachmentOptionsDropdownContainer", cls="dropdown dropdown-top"
-            ),
-
-
-            Form(
-
-                Input(type="file", multiple=True, id="fileInput", name="files_placeholder", cls="hidden"),
-
-                # Chat Textarea
-                Textarea(id="chatInput", name="chatInput", 
-                        placeholder="Describe your symptoms here...",
-                        cls="textarea textarea-bordered flex-grow resize-none scrollbar-thin",
-                        rows="1", style="min-height: 44px; max-height: 120px;"),
-
-                # Send Button
-                Button(
-                    Span("send", cls="material-icons emoji-icon text-xl"),
-                    id="sendButton",
-                    type="submit",   
-                    cls="btn btn-primary btn-circle"
-                ),
-
-
-                # HTMX attributes for the Form:
-                id="chatForm", # Added an ID to the form for easier JS targeting
-                hx_post="/send_chat_message",
-                hx_target="#messagesArea", # Target for appending new user/AI messages
-                hx_swap="beforeend",     # Append new messages to the target
-                cls="flex items-end space-x-2 sm:space-x-3 flex-grow"
-            ),
-            cls="flex items-end space-x-2 sm:space-x-3" # Original class for this parent Div
+        Input(type="hidden", name="type", value="user"),
+        Button(
+            Span("➤", cls="send-icon"),
+            id="send-button",
+            type="submit",
+            cls="send-button"
         ),
-        cls="bg-base-100 p-3 sm:p-4 shadow-inner border-t border-base-300"
+        cls="chat-input-area",
+        hx_post="/htmx/store_chat_message",
+        hx_on_htmx_after_request="this.reset(); document.getElementById('chat-input').style.height='auto'; htmx.trigger('#chat-messages', 'chatHistoryRefresh');"
     )
 
     left_panel_chatbox = Div(
@@ -3273,6 +3239,8 @@ variation1_script_content = """
     }
 """
 
+# Chat history endpoints removed - now handled entirely client-side with JavaScript
+
 @rt('/onboarding/personal-info', methods=['GET'])
 def personal_info_get(auth): 
     if auth is None: 
@@ -3281,139 +3249,95 @@ def personal_info_get(auth):
     user_email = auth.get('email', 'User') 
     user_initial = user_email[0].upper() if user_email and len(user_email) > 0 else 'A'
 
-    akasi_ball_v1 = Div(
-        Span(user_initial), 
-        id="akasiBall1", 
-        cls="floating-ball bg-gradient-to-br from-teal-400 via-cyan-500 to-sky-600 mb-6" 
+    # Initial message - will be handled by JavaScript
+    initial_message = "Hello there! I'm Akasi, your AI health guardian. I'm excited to help you on your wellness journey! 😊 Let's start with the basics - what's your full name?"
+
+    # Chat history button in top right with Google Material Icon
+    chat_history_button = Button(
+        Span("chat", cls="material-icons"),
+        id="chat-history-button",
+        cls="chat-history-button",
+        title="View conversation history"
     )
 
-    message_container_v1 = Div(
-        id="messageContainer1",
-        cls="message-area space-y-3 mb-8 w-full max-w-xs mx-auto" 
+    # Combined Akasi component (speech bubble + floating ball as one unit)
+    akasi_component = Div(
+        # Speech bubble positioned relative to this wrapper
+        Div(
+            initial_message,
+            id="akasi-speech-bubble",
+            cls="akasi-speech-bubble show"
+        ),
+        # Floating ball
+        Div(
+            Span("♥", cls="heart-icon"),
+            cls="akasi-floating-ball"
+        ),
+        cls="akasi-component"  # New wrapper class for the combined component
     )
 
-    start_button_v1 = Button(
-        "Let's Get Started",
-        id="startButton1", 
-        type="button",
-        hx_get="/onboarding/personal-info/form", 
-        hx_target="#onboarding-card-content", 
-        hx_swap="innerHTML",
-        # MODIFIED: Removed mt-auto, added mt-12 for specific top margin
-        cls="btn btn-primary bg-teal-600 hover:bg-teal-700 border-none text-white text-lg px-8 py-3 rounded-lg shadow hover:shadow-lg transition-opacity duration-500 opacity-0 mt-12" 
+    # Chat input area (now positioned at bottom of screen) - removed HTMX attributes
+    chat_input_area = Form(
+        Textarea(
+            id="chat-input",
+            name="message",
+            placeholder="Type your response...",
+            cls="chat-input"
+        ),
+        Input(type="hidden", name="type", value="user"),
+        Button(
+            Span("➤", cls="send-icon"),
+            id="send-button",
+            type="submit",
+            cls="send-button"
+        ),
+        cls="chat-input-area"
     )
 
-    main_card_content_variation1 = Div(
-        akasi_ball_v1,
-        message_container_v1,
-        start_button_v1,
-        id="onboarding-card-content", 
-        # MODIFIED: Added justify-center to vertically center the content group
-        cls="bg-base-100 p-8 md:p-12 rounded-xl shadow-2xl text-center flex flex-col items-center justify-center min-h-[600px]"
+    # Chat history modal - removed HTMX attributes
+    chat_history_modal = Div(
+        Div(
+            Div(
+                H2("Chat History", cls="chat-history-title"),
+                Button(
+                    Span("✕"),
+                    id="close-chat-history",
+                    cls="close-chat-history"
+                ),
+                cls="chat-history-header"
+            ),
+            Div(
+                id="chat-messages",
+                cls="chat-messages"
+            ),
+            cls="chat-history-modal"
+        ),
+        id="chat-history-overlay",
+        cls="chat-history-overlay"
     )
-    
-    onboarding_main_wrapper_v1 = Main(
-        main_card_content_variation1,
-        cls="container mx-auto max-w-md w-full" 
+
+    # Main onboarding container
+    onboarding_container = Div(
+        akasi_component,  # Using the combined component instead of separate elements
+        cls="onboarding-container"
     )
-    
-    page_layout_wrapper = Div(
-        onboarding_main_wrapper_v1,
-        cls="flex flex-col items-center justify-center w-full min-h-screen px-4 py-8"
+
+    # Full page wrapper with gradient background
+    page_wrapper = Div(
+        chat_history_button,
+        onboarding_container,
+        chat_input_area,
+        chat_history_modal,
+        cls="onboarding-gradient-bg"
     )
     
     return (
         Title("Personal Information - Akasi.ai Onboarding"),
-        Style(onboarding_styles_content), 
-        page_layout_wrapper,
-        Script(variation1_script_content) 
+        Link(href="https://fonts.googleapis.com/icon?family=Material+Icons", rel="stylesheet"),
+        Link(rel="stylesheet", href="/css/onboarding_conversation.css"),
+        Script(src="/js/onboarding_conversation.js", defer=True),
+        page_wrapper
     )
-
-@rt('/onboarding/personal-info/form')
-def form_view(auth): 
-    if auth is None: 
-        return Div("Authentication required.", cls="text-red-500 p-4 text-center") 
-
-    form_title = H3(
-        "Let's get to know you better",
-        cls="text-xl md:text-2xl font-semibold text-gray-800 text-center mb-6" 
-    )
-
-    full_name_input = Div(
-        Label(Span("Full name", cls="label-text text-gray-700"), For="fullName", cls="label"),
-        Input(type="text", id="fullName", name="full_name", placeholder="e.g., Test User",
-              cls="input input-bordered input-primary w-full focus:ring-teal-500 focus:border-teal-500", required=True)
-    )
-
-    dob_input = Div(
-        Label(Span("Date of birth", cls="label-text text-gray-700"), For="dob", cls="label"),
-        Input(type="date", id="dob", name="date_of_birth",
-              cls="input input-bordered input-primary w-full focus:ring-teal-500 focus:border-teal-500", required=True)
-    )
-
-    gender_select = Div(
-        Label(Span("Gender", cls="label-text text-gray-700"), For="gender", cls="label"),
-        Select(
-            Option("Select gender", value="", disabled=True, selected=True),
-            Option("Male", value="male"),
-            Option("Female", value="female"),
-            Option("Other", value="other"),
-            Option("Prefer not to say", value="prefer_not_to_say"),
-            id="gender", name="gender",
-            cls="select select-bordered select-primary w-full focus:ring-teal-500 focus:border-teal-500", required=True
-        )
-    )
-    
-    dob_gender_grid = Div(dob_input, gender_select, cls="grid md:grid-cols-2 gap-6")
-
-    height_input = Div(
-        Label(Span("Height (cm)", cls="label-text text-gray-700"), For="height", cls="label"),
-        Input(type="number", id="height", name="height", placeholder="e.g., 170",
-              cls="input input-bordered input-primary w-full focus:ring-teal-500 focus:border-teal-500", required=True)
-    )
-
-    weight_input = Div(
-        Label(Span("Weight (kg)", cls="label-text text-gray-700"), For="weight", cls="label"),
-        Input(type="number", id="weight", name="weight", placeholder="e.g., 60",
-              cls="input input-bordered input-primary w-full focus:ring-teal-500 focus:border-teal-500", required=True)
-    )
-
-    height_weight_grid = Div(height_input, weight_input, cls="grid md:grid-cols-2 gap-6")
-    
-    ethnicity_select = Div(
-        Label(Span("Ethnicity", cls="label-text text-gray-700"), For="ethnicity", cls="label"),
-        Select(
-            Option("Select ethnicity", value="", disabled=True, selected=True),
-            Option("Filipino", value="filipino"), Option("Chinese", value="chinese"),
-            Option("Japanese", value="japanese"), Option("Korean", value="korean"),
-            Option("Indian", value="indian"), Option("Caucasian", value="caucasian"),
-            Option("African Descent", value="african_descent"), Option("Hispanic/Latino", value="hispanic_latino"),
-            Option("Middle Eastern", value="middle_eastern"), Option("Native American", value="native_american"),
-            Option("Pacific Islander", value="pacific_islander"), Option("Mixed Race", value="mixed_race"),
-            Option("Other", value="other"), Option("Prefer not to say", value="prefer_not_to_say"),
-            id="ethnicity", name="ethnicity",
-            cls="select select-bordered select-primary w-full focus:ring-teal-500 focus:border-teal-500", required=True
-        )
-    )
-
-    form_submit_button = Div(
-        Button("Continue", type="submit", id="confirm-personal-info",
-               cls="btn btn-primary bg-teal-600 hover:bg-teal-700 border-none text-white w-full text-lg"),
-        cls="pt-4" # Tailwind: padding-top: 1rem
-    )
-
-    personal_info_form = Form(
-        full_name_input, dob_gender_grid, height_weight_grid, ethnicity_select, form_submit_button,
-        id="personal-info-form", cls="space-y-6", method="post", action="/onboarding/personal-info"
-    )
-    
-    form_container_for_swap = Div(
-        form_title,
-        personal_info_form,
-        cls="w-full text-left" 
-    )
-    
-    return form_container_for_swap
 
 
 @rt('/onboarding/personal-info', methods=['POST'])
@@ -3432,15 +3356,27 @@ async def personal_info_post(request, auth):
     auth_client = use_auth_context(access_token, refresh_token)
     
     try:
+        # Convert DD-MM-YYYY to YYYY-MM-DD for database storage
+        date_of_birth = str(form.get('date_of_birth', ''))
+        if date_of_birth:
+            try:
+                # Parse DD-MM-YYYY format
+                day, month, year = date_of_birth.split('-')
+                # Convert to YYYY-MM-DD format for database
+                date_of_birth = f"{year}-{month.zfill(2)}-{day.zfill(2)}"
+            except (ValueError, AttributeError):
+                print(f"Invalid date format: {date_of_birth}")
+                # Keep original value if parsing fails
+        
         # Use authenticated client for database operations
         profile_data = {
             'user_id': user_id,
-            'full_name': form.get('full_name'),
-            'date_of_birth': form.get('date_of_birth'),
-            'gender': form.get('gender'),
-            'height': form.get('height'),
-            'weight': form.get('weight'),
-            'ethnicity': form.get('ethnicity'),
+            'full_name': str(form.get('full_name', '')),
+            'date_of_birth': date_of_birth,
+            'gender': str(form.get('gender', '')),
+            'height': str(form.get('height', '')),
+            'weight': str(form.get('weight', '')),
+            'ethnicity': str(form.get('ethnicity', '')),
             'onboarding_step': 'wellness_journal'  # Update onboarding step
         }
         
@@ -3461,6 +3397,10 @@ async def personal_info_post(request, auth):
 
     # Process form data here and redirect to next step
     return RedirectResponse('/onboarding/wellness-journal', status_code=303)
+
+
+
+
 
 
 

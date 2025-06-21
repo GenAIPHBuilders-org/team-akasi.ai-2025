@@ -23,5 +23,3 @@ __pycache__/
 # Cursor IDE folder
 .cursor/
 
-# Static files
-static/
