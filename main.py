@@ -3273,8 +3273,8 @@ variation1_script_content = """
     }
 """
 
-@rt('/onboarding/personal-info')
-def personal_info_page(auth): 
+@rt('/onboarding/personal-info', methods=['GET'])
+def personal_info_get(auth): 
     if auth is None: 
         return RedirectResponse('/login', status_code=303)
     
@@ -3416,8 +3416,8 @@ def form_view(auth):
     return form_container_for_swap
 
 
-@rt('/onboarding/personal-info')
-async def personal_info_submit(request, auth):
+@rt('/onboarding/personal-info', methods=['POST'])
+async def personal_info_post(request, auth):
     if auth is None: return RedirectResponse('/login', status_code=303)
     
     form = await parse_form(request)
@@ -3461,6 +3461,8 @@ async def personal_info_submit(request, auth):
 
     # Process form data here and redirect to next step
     return RedirectResponse('/onboarding/wellness-journal', status_code=303)
+
+
 
 
 # Styles needed for the dashboard
