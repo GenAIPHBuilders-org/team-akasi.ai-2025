@@ -27,8 +27,6 @@ let stagedFilesData = [];
 
 let fileInputEl = null;
 let stagedAttachmentsContainerEl = null;
-let attachImageButtonEl = null;
-let attachDocumentButtonEl = null;
 let chatFormEl = null;
 let chatInputEl = null;
 
@@ -44,31 +42,10 @@ let closeManualEntryModalButtonJsEl = null;
 function initializeChatAttachmentElements() {
     fileInputEl = document.getElementById('fileInput');
     stagedAttachmentsContainerEl = document.getElementById('stagedAttachmentsContainer');
-    attachImageButtonEl = document.getElementById('attachImageButton');
-    attachDocumentButtonEl = document.getElementById('attachDocumentButton');
     chatFormEl = document.getElementById('chatForm');
     chatInputEl = document.getElementById('chatInput');
 
-    if (attachImageButtonEl && fileInputEl) {
-        attachImageButtonEl.addEventListener('click', () => {
-            fileInputEl.accept = 'image/*';
-            fileInputEl.multiple = true;
-            fileInputEl.click();
-            if (document.activeElement && document.activeElement instanceof HTMLElement) {
-                document.activeElement.blur();
-            }
-        });
-    }
-    if (attachDocumentButtonEl && fileInputEl) {
-        attachDocumentButtonEl.addEventListener('click', () => {
-            fileInputEl.accept = '.pdf,.doc,.docx,.txt,.md';
-            fileInputEl.multiple = true;
-            fileInputEl.click();
-            if (document.activeElement && document.activeElement instanceof HTMLElement) {
-                document.activeElement.blur();
-            }
-        });
-    }
+    // File input already has onclick handler in HTML, so just add change listener
     if (fileInputEl) {
         fileInputEl.addEventListener('change', handleFileSelection);
     }
@@ -179,8 +156,18 @@ function renderStagedAttachments() {
         fileInfo.className = 'flex items-center overflow-hidden mr-2 flex-grow';
 
         const icon = document.createElement('span');
-        icon.className = 'material-symbols-outlined emoji-icon text-lg mr-1.5 text-primary/80 flex-shrink-0';
-        icon.textContent = stagedFile.type === 'image' ? 'image' : 'article';
+        icon.className = 'material-icons emoji-icon text-lg mr-1.5 text-primary/80 flex-shrink-0';
+        
+        // More specific icon selection based on file type
+        if (stagedFile.type === 'image') {
+            icon.textContent = 'image';
+        } else if (stagedFile.file.name.toLowerCase().endsWith('.pdf')) {
+            icon.textContent = 'picture_as_pdf';
+        } else if (stagedFile.file.name.toLowerCase().match(/\.(doc|docx)$/)) {
+            icon.textContent = 'description';
+        } else {
+            icon.textContent = 'article';
+        }
 
         const nameAndSizeDiv = document.createElement('div');
         nameAndSizeDiv.className = 'flex flex-col overflow-hidden';
@@ -203,7 +190,7 @@ function renderStagedAttachments() {
         const removeBtn = document.createElement('button');
         removeBtn.type = 'button';
         removeBtn.className = 'btn btn-xs btn-ghost btn-circle text-error opacity-50 group-hover:opacity-100 transition-opacity flex-shrink-0';
-        removeBtn.innerHTML = '<span class="material-symbols-outlined emoji-icon text-base">close</span>';
+        removeBtn.innerHTML = '<span class="material-icons emoji-icon text-base">close</span>';
         removeBtn.title = 'Remove attachment';
         removeBtn.onclick = (e) => {
             e.stopPropagation();

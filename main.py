@@ -45,6 +45,43 @@ from typing import Union
 BASE_DIR = Path(__file__).resolve().parent
 load_dotenv(os.path.join(BASE_DIR, '.env'))
 
+# --- Logging Helper Functions ---
+def log_step(step_name: str, details: str = "", data: Any = None):
+    """Clean logging with consistent format for debugging"""
+    print(f"\n🔹 {step_name.upper()}")
+    if details:
+        print(f"   📝 {details}")
+    if data is not None:
+        if isinstance(data, str) and len(data) > 100:
+            print(f"   📊 Data: {data[:50]}...{data[-20:]} (truncated, length: {len(data)})")
+        elif isinstance(data, (list, dict)):
+            print(f"   📊 Data: {str(data)[:200]}{'...' if len(str(data)) > 200 else ''}")
+        else:
+            print(f"   📊 Data: {data}")
+
+def log_error(context: str, error: Exception):
+    """Clean error logging"""
+    print(f"\n❌ ERROR in {context}")
+    print(f"   🚨 {str(error)}")
+
+def log_success(step_name: str, details: str = ""):
+    """Clean success logging"""
+    print(f"\n✅ {step_name.upper()} - SUCCESS")
+    if details:
+        print(f"   🎯 {details}")
+
+def truncate_base64(b64_string: str, start_chars: int = 20, end_chars: int = 10) -> str:
+    """Truncate base64 strings for readable logging"""
+    if not b64_string or len(b64_string) <= start_chars + end_chars:
+        return b64_string
+    return f"{b64_string[:start_chars]}...{b64_string[-end_chars:]} (len: {len(b64_string)})"
+
+
+
+
+
+
+
 
 supabase_url = os.getenv("SUPABASE_URL_NEW")
 supabase_anon_key = os.getenv("SUPABASE_ANON_KEY_NEW")
@@ -291,17 +328,67 @@ async def process_files_to_base64_list(files: list[UploadFile]) -> list[dict]:
 # --- 🟣🟣🟣🟣 BUILDING THE LLM AGENT 1 🟣🟣🟣🟣 --- 
 # Create an AI agent that has image tool that inteprets the message gets the data then gives it to the agent
 # Then add a workflow to the agent so that you can control the body scanner
+
 model_1_claude_haiku = "anthropic.claude-3-haiku-20240307-v1:0"
 model_2_claude_3_5_sonnet =  "anthropic.claude-3-5-sonnet-20240620-v1:0"
 model_2_claude_3_5_sonnet_v2 =  "anthropic.claude-3-5-sonnet-20241022-v2:0"
+model_claude_3_7_sonnet = "us.anthropic.claude-3-7-sonnet-20250219-v1:0"
+model_claude_4_sonnet = "us.anthropic.claude-sonnet-4-20250514-v1:0"
+model_claude_4_opus = "us.anthropic.claude-opus-4-20250514-v1:0"
 
+# --- LLM Configuration with Extended Thinking Control ---
+
+# --- LLM Configuration Settings ---
+# ENABLE_EXTENDED_THINKING = False  # Set to False to disable Claude 4 extended thinking
+# THINKING_BUDGET_TOKENS = 2000     # Conservative starting point
+
+# # Main LLM for complex reasoning and text processing
+# if ENABLE_EXTENDED_THINKING and "claude-4" in model_claude_4_sonnet:
+#     # Claude 4 with controlled extended thinking
+#     llm = init_chat_model(
+#         model_claude_4_sonnet,
+#         model_provider="bedrock_converse",
+#         region_name='us-west-2',
+#         temperature=0.1,
+#         max_tokens=4000,  # Reduced to prevent massive token usage
+#         model_kwargs={
+#             "thinking": {
+#                 "type": "enabled",
+#                 "budget_tokens": THINKING_BUDGET_TOKENS
+#             }
+#         }
+#     )
+# else:
+#     # Claude 4 without extended thinking or other models
+#     llm = init_chat_model(
+#         model_claude_4_sonnet,
+#         model_provider="bedrock_converse",
+#         region_name='us-west-2',
+#         temperature=0.1,
+#         max_tokens=4000  # Conservative limit
+#     )
+
+# When using Claude 4 its slow use Claude 3.5 or 3.7 instead.
 
 llm = init_chat_model(
-    "anthropic.claude-3-5-sonnet-20241022-v2:0",
+    model_claude_3_7_sonnet,
     model_provider="bedrock_converse",
     region_name='us-west-2',
-    temperature = 0.1,
+    temperature=0.1,
+    max_tokens=1200  # Conservative limit when using claude 4
 )
+
+
+# Dedicated LLM for image processing to avoid Claude 4's extended thinking overhead
+llm_for_image = init_chat_model(
+    model_claude_4_sonnet,
+    model_provider="bedrock_converse",
+    region_name='us-west-2',
+    temperature=0.1,
+    max_tokens=3000  # Sufficient for image analysis
+)
+
+# print(f"🚀 Akasi.ai LLM System Ready - Claude 4 (thinking: {'on' if ENABLE_EXTENDED_THINKING else 'off'}) + Claude 3.7 (images)")
 
 
 class MedicalAgentState(TypedDict):
@@ -319,9 +406,7 @@ memory = MemorySaver()
 def summarize_medical_images_tool_interface(images: List[dict]) -> str:
     """
     Analyzes and summarizes a list of provided medical images (e.g., X-rays, MRIs)
-    by making an internal LLM call.
-    This tool is invoked by the system when images are available in the current context
-    and a summary is requested. The list of base64 encoded images is provided as an argument.
+    by making an internal LLM call. 
     """
     if not images:
         return "Error: No images were provided to summarize."
@@ -373,18 +458,19 @@ def summarize_medical_images_tool_interface(images: List[dict]) -> str:
     summarization_human_message = HumanMessage(content=message_content_parts)
 
     try:
-        print(f"Tool invoking LLM for summarization with {len(message_content_parts) -1} image(s).")
-        response = llm.invoke([summarization_system_prompt, summarization_human_message])
+        log_step("image analysis", f"Processing {len(message_content_parts) -1} medical image(s) using Claude 3.7")
+        
+        response = llm_for_image.invoke([summarization_system_prompt, summarization_human_message])
         
         if isinstance(response, AIMessage) and response.content:
-            print(f"Tool's LLM summarization successful. Summary: {response.content[:100]}...")
+            log_success("image analysis", f"Generated summary: {len(response.content)} characters")
             return str(response.content)
         else:
-            print(f"Tool's LLM summarization did not return expected AIMessage. Response: {response}")
+            log_error("image analysis", Exception(f"Unexpected response type: {type(response)}"))
             return "Error: Could not generate a summary from the LLM within the tool."
             
     except Exception as e:
-        print(f"Error during LLM-based image summarization within tool: {e}")
+        log_error("image analysis", e)
         return f"Error summarizing images within tool: {str(e)}"
 
 
@@ -398,18 +484,19 @@ def decide_action_node(state: MedicalAgentState):
     """
     The LLM decides whether to respond directly or call a tool.
     """
-    print("\n--- Entered decide_action_node ---")
+    log_step("llm decision node", f"Processing {len(state['messages'])} messages")
     
     akasi_system_message = SystemMessage(content=AKASI_SYSTEM_MESSAGE_CONTENT)
-            
     messages_for_llm_invocation = [akasi_system_message] + state["messages"]
     
-    print(f"Messages for LLM call in decide_action_node (first is Akasi persona): {[m.type for m in messages_for_llm_invocation]}")
+    log_step("llm invocation", f"Message types: {[m.type for m in messages_for_llm_invocation]}")
     
     # Invoke the LLM with the Akasi persona and the rest of the conversation history
     response = llm_with_tools.invoke(messages_for_llm_invocation)
     
-    print(f"LLM response type: {response.type}, Tool calls: {getattr(response, 'tool_calls', 'N/A')}")
+    has_tools = getattr(response, 'tool_calls', None)
+    log_success("llm decision", f"Response type: {response.type}, Tool calls: {'Yes' if has_tools else 'No'}")
+    
     # The response (AIMessage) will be added to the state's message list by LangGraph's `add_messages`
     return {"messages": [response]}
 
@@ -520,10 +607,10 @@ class BodyScannerCommand(BaseModel):
 
 
 def body_scanner_commands(state: MedicalAgentState):
-    print("\n--- Entered body_scanner_commands_node ---")
+    log_step("body scanner commander", f"Analyzing {len(state['messages'])} messages")
     conversation_history = state["messages"]
     if not conversation_history:
-        print("Warning: No conversation history found for body scanner command generation.")
+        log_step("body scanner fallback", "No conversation history, using idle command")
         return {"body_scanner_command": "idle"} # Default command
 
     # Ensure the LLM used here supports ainvoke and structured output
@@ -532,8 +619,6 @@ def body_scanner_commands(state: MedicalAgentState):
     system_prompt_content = BODY_SCANNER_SYSTEM_MESSAGE_CONTENT
 
     # Prepare messages for the commander LLM
-    # The Bedrock Claude messages API expects a list of message dicts,
-    # or LangChain BaseMessage objects.
     messages_for_commander_llm: List[BaseMessage] = [
         SystemMessage(content=system_prompt_content)
     ]
@@ -545,8 +630,6 @@ def body_scanner_commands(state: MedicalAgentState):
     
     try:
         result = body_scanner_commander_llm.invoke(messages_for_commander_llm)
-        print(f"Body scanner commander LLM result type: {type(result)}")
-        print(f"Body scanner commander LLM result: {result}")
         
         # Fix: Access the Pydantic model field directly
         if result and isinstance(result, BodyScannerCommand):
@@ -554,10 +637,10 @@ def body_scanner_commands(state: MedicalAgentState):
         else:
             command_to_set = "idle"
             
-        print(f"Body scanner commander LLM result: {command_to_set}")
+        log_success("body scanner command", f"Selected: {command_to_set}")
         return {"body_scanner_command": command_to_set}
     except Exception as e:
-        print(f"Error in body_scanner_commander_llm.invoke: {e}")
+        log_error("body scanner commander", e)
         return {"body_scanner_command": "idle"}
 
 
@@ -660,14 +743,11 @@ graph_builder_3 = StateGraph(Workflow2State)
 
 
 def wellness_journal_entry_generator_node(state: Workflow2State):
-    print("\n--- Entered wellness_journal_entry_generator_node --------------------")
-    print(current_date_manila_iso)
-
-    # print(pending_journal_updates)
+    log_step("wellness journal generator", f"Processing conversation with {len(state['messages'])} messages")
+    log_step("current date", current_date_manila_iso)
 
     conversation_history = state["messages"]
     existing_entries_str = state.get("existing_journal_entries_json_string", "[]") 
-
 
     # Ensure the LLM used here supports ainvoke and structured output
     wellness_journal_llm = llm.with_structured_output(WellnessJournalOperation)
@@ -675,12 +755,11 @@ def wellness_journal_entry_generator_node(state: Workflow2State):
     try:
         current_pending_updates_str = json.dumps(pending_journal_updates)
     except TypeError as e:
-        print(f"Error serializing pending_journal_updates: {e}. Using empty list.")
+        log_error("journal serialization", e)
         current_pending_updates_str = "[]"
 
-
     if not conversation_history:
-        print("Warning: No conversation history found for journal entry generation.")
+        log_step("journal fallback", "No conversation history found")
         return {"wellness_journal_operation": None} 
 
     # Prepare messages for the journal LLM
@@ -692,31 +771,27 @@ def wellness_journal_entry_generator_node(state: Workflow2State):
     if all(isinstance(msg, BaseMessage) for msg in conversation_history):
         messages_for_journal_llm.extend(conversation_history)
     else:
-        print("Warning: Conversation history contains non-BaseMessage objects. Attempting conversion or skipping.")
-
-
+        log_step("message validation", "Some messages are not BaseMessage objects, attempting conversion")
 
     messages_for_journal_llm.append(
         HumanMessage(content="Based on the full conversation history, the EXTERNALLY SAVED journal entries, AND THE PENDING updates, what is the single most appropriate wellness journal operation (ADD, UPDATE, or REMOVE) to perform next? Provide only the JSON object.")
     )
 
-
     try:
-
-        print("LLM call with structured output would happen here.")
+        log_step("journal llm invoke", f"Calling LLM with {len(messages_for_journal_llm)} messages")
         journal_operation_result = wellness_journal_llm.invoke(messages_for_journal_llm)
 
         if journal_operation_result:
-            print(f"💛 Wellness journal LLM result: {journal_operation_result}")
-            print(journal_operation_result)
-            print(type(journal_operation_result))
+            action = getattr(journal_operation_result, 'wellness_journal_entry_action', 'unknown')
+            title = getattr(journal_operation_result, 'wellness_journal_title', 'untitled')
+            log_success("journal operation", f"Generated: {action} - {title}")
             return {"wellness_journal_operation": journal_operation_result}
         else:
-            print("Wellness journal LLM returned no result.")
+            log_step("journal result", "LLM returned no result")
             return {"wellness_journal_operation": None}
 
     except Exception as e:
-        print(f"Error in wellness_journal_llm.invoke: {e}")
+        log_error("journal llm invoke", e)
         return {"wellness_journal_operation": None}
 
 
@@ -733,17 +808,15 @@ graph_workflow_2 = graph_builder_3.compile()
 
 async def process_wellness_journal_data(input_payload_for_journal):
     """
-    Simulates processing of conversation history for a wellness journal entry.
-    Prints a preconfigured output after a delay.
+    Processes conversation history for a wellness journal entry.
     """
-    print("--- Wellness Journal Processor UI PROCESS---")
-
+    log_step("journal processor", "Starting journal data processing")
 
     journal_output_process_2 = graph_workflow_2.invoke(input_payload_for_journal)
     actual_journal_operation = journal_output_process_2.get("wellness_journal_operation")
 
     if actual_journal_operation is None:
-        print("No journal operation to process - actual_journal_operation is None")
+        log_step("journal processor", "No journal operation generated")
         return None
 
     wellness_journal_final_entries = {
@@ -755,14 +828,11 @@ async def process_wellness_journal_data(input_payload_for_journal):
         "wellness_journal_severity_value": actual_journal_operation.wellness_journal_severity_value,  
     }    
 
-    print(wellness_journal_final_entries)
+    log_step("journal entry created", f"{wellness_journal_final_entries['wellness_journal_entry_action']} - {wellness_journal_final_entries['wellness_journal_title']}")
     pending_journal_updates.append(wellness_journal_final_entries)
     pending_journal_updates_2.append(wellness_journal_final_entries)
 
-    print("💚 --- JOURNAL UPDATES NEW VALUE---")
-    print(pending_journal_updates)
-
-    print("💚 --- JOURNAL UPDATES NEW VALUE---")
+    log_success("journal processor", f"Added to queue (total pending: {len(pending_journal_updates)})")
     return wellness_journal_final_entries
 
 
@@ -857,17 +927,16 @@ async def llm_agent_1(user_message: str, attachments_data: Optional[list[dict]] 
     'attachments_data' is expected to be a list of dictionaries, where each dict has:
     {"filename": "...", "content_type": "image/png", "base64": "..."}
     """
-    print(f"\n--- Entered llm_agent_1 ---")
-    print(f"User Message: {user_message}")
+    log_step("main llm agent", f"Using Claude 4 Sonnet for text processing: {user_message[:100]}{'...' if len(user_message) > 100 else ''}")
+    
     if attachments_data:
-        print(f"Number of attachments: {len(attachments_data)}")
+        log_step("attachments", f"Processing {len(attachments_data)} attachments (will use Claude 3.7 for image analysis)")
 
     message_content_parts: List[dict] = [{"type": "text", "text": user_message}]
     image_details_for_state_and_tool: List[dict] = [] 
 
     if attachments_data:
         for att_data in attachments_data:
-
             b64_string = att_data.get("base64")
             media_type = att_data.get("content_type", "image/jpeg")
 
@@ -876,9 +945,8 @@ async def llm_agent_1(user_message: str, attachments_data: Optional[list[dict]] 
                     "type": "image",
                     "source": {"type": "base64", "media_type": media_type, "data": b64_string}
                 })
-
                 image_details_for_state_and_tool.append({"data": b64_string, "media_type": media_type})
-    
+                log_step("attachment processed", f"{media_type} - {truncate_base64(b64_string)}")
 
     config = cast(Any, {"configurable": {"thread_id": "1"}})
     initial_messages = HumanMessage(content=cast(Any, message_content_parts))
@@ -888,46 +956,29 @@ async def llm_agent_1(user_message: str, attachments_data: Optional[list[dict]] 
         "input_base64_images": image_details_for_state_and_tool if image_details_for_state_and_tool else None,
     }
 
-    print(f"\nInitial graph state being sent to agent:")
-    print(f"  Input Base64 Images provided: {bool(initial_graph_state['input_base64_images'])}")
-    if initial_graph_state['input_base64_images']:
-        print(f"  Number of image details for tool: {len(initial_graph_state['input_base64_images'])}")
-
-    for i, msg in enumerate(initial_graph_state["messages"]):
-        print(f"  Message {i} Type: {msg.type}")
-        if isinstance(msg.content, list):
-            for part_idx, part in enumerate(msg.content):
-                if part["type"] == "text":
-                    print(f"    Part {part_idx} (text): {part['text'][:50]}...")
-                elif part["type"] == "image":
-                    print(f"    Part {part_idx} (image): media_type={part['source']['media_type']}, data_len={len(part['source']['data'])}")
-        else:
-            print(f"    Content: {str(msg.content)[:70]}...")
+    log_step("graph state", f"Created with {len(initial_graph_state['messages'])} messages, images: {bool(initial_graph_state['input_base64_images'])}")
 
     final_state = graph_1.invoke(initial_graph_state, config)
 
     final_ai_response_content = "No response generated."
+    final_ai_message = None
+    
     if final_state and "messages" in final_state and final_state["messages"]:
         last_message_obj = final_state["messages"][-1]
         if isinstance(last_message_obj, AIMessage):
             final_ai_response_content = last_message_obj.content
+            final_ai_message = last_message_obj
         elif isinstance(last_message_obj, ToolMessage) and len(final_state["messages"]) > 1:
             potential_ai_message = final_state["messages"][-2]
             if isinstance(potential_ai_message, AIMessage):
                  final_ai_response_content = potential_ai_message.content
+                 final_ai_message = potential_ai_message
         else:
             final_ai_response_content = str(last_message_obj.content)
 
-    print(f"\nFinal AI Response from invoke: {final_ai_response_content}")
-
-
-    # print("------------------ PRINTING FINAL STATE MESSAGES-----------------------")
-    # print(final_state["messages"])
-    # print("------------------ PRINTING FINAL STATE MESSAGES-----------------------")
+    log_success("ai response", str(final_ai_response_content))
 
     ai_response = final_ai_response_content
-    print("------------------ body scanner command start -----------------------")    
-
 
     workflow_input_state = {
         "messages": final_state.get("messages", []), 
@@ -936,10 +987,7 @@ async def llm_agent_1(user_message: str, attachments_data: Optional[list[dict]] 
     }    
 
     body_scan_command_wf = graph_workflow_1.invoke(workflow_input_state)
-
-    print("------------------ body scanner command workflow output -----------------------")    
-
-    print(body_scan_command_wf)
+    log_step("body scanner result", body_scan_command_wf["body_scanner_command"])
 
     workflow_input_state = {
         "messages": final_state.get("messages", []), 
@@ -947,13 +995,9 @@ async def llm_agent_1(user_message: str, attachments_data: Optional[list[dict]] 
         "body_scanner_command": None 
     }    
 
-
     asyncio.create_task(process_wellness_journal_data(workflow_input_state))
-    print("--- Wellness Journal Processor: Task scheduled (will run in background) ---")
+    log_step("background task", "Journal processor scheduled")
 
-
-
-    
     response_data = {
         "ai_response": f"{ai_response}", # Dynamic AI response
         "body_scanner_animation_action_comand": body_scan_command_wf["body_scanner_command"],
@@ -1006,14 +1050,11 @@ def unified_ui_controller_for_chat_window_and_body_scanner(llm_data: dict, user_
 
 @rt("/send_chat_message")
 async def handle_send_chat_message(req, sess):
-    print("================== send_chat_message route  - PRINTING FORM DATA =======================")
+    log_step("chat message route", "Processing incoming chat submission")
     form_data = await req.form()
-    print(form_data)
     user_message_text = form_data.get("chatInput", "")
 
-    print("================== send_chat_message route - PRINTING  user_message_text=======================")
-
-    print(user_message_text)
+    log_step("user input", f"Message: {user_message_text[:150]}{'...' if len(user_message_text) > 150 else ''}")
 
 
     uploaded_file_objects: list[UploadFile] = form_data.getlist("files")
@@ -1023,7 +1064,7 @@ async def handle_send_chat_message(req, sess):
     
     # This needs to be more effecient because I have to wait for the file to be converted to base64 then inserted on saupabase. I think its because of the uuid that I need to wait
     if uploaded_file_objects:
-        print(f"Received {len(uploaded_file_objects)} file objects in /send_chat_message.")
+        log_step("file upload", f"Processing {len(uploaded_file_objects)} uploaded files")
         base64_attachments_list = await process_files_to_base64_list(uploaded_file_objects)
         
         if base64_attachments_list:
@@ -1040,16 +1081,16 @@ async def handle_send_chat_message(req, sess):
                         if response.data and len(response.data) > 0:
                             new_uuid = response.data[0]['id']
                             attachment_uuids_for_next_step.append(str(new_uuid))
-                            print(f"Inserted attachment {att_data.get('filename', 'N/A')} to Supabase with UUID: {new_uuid}")
+                            log_step("supabase insert", f"Stored {att_data.get('filename', 'N/A')} with UUID: {new_uuid}")
                         else:
-                            print(f"Error inserting {att_data.get('filename', 'N/A')} to Supabase or no data returned. Response: {response}")
+                            log_error("supabase insert", Exception(f"No data returned for {att_data.get('filename', 'N/A')}"))
                     except Exception as e:
-                        print(f"Supabase insert exception for {att_data.get('filename', 'N/A')}: {e}")
+                        log_error("supabase insert", e)
                 else:
-                    print(f"Skipping insert for attachment due to processing error or missing base64: {att_data.get('filename', 'N/A')}")
-            print(f"Collected {len(attachment_uuids_for_next_step)} UUIDs from Supabase inserts.")
+                    log_step("file skip", f"Skipping {att_data.get('filename', 'N/A')} due to processing error")
+            log_success("file processing", f"Collected {len(attachment_uuids_for_next_step)} UUIDs from Supabase")
         else:
-            print("No valid attachments processed to store in Supabase.")
+            log_step("file processing", "No valid attachments to store")
     
     
     if not user_message_text and not processed_attachments_for_preview:
@@ -1071,7 +1112,7 @@ async def handle_send_chat_message(req, sess):
                 size_text = f"({file_size_kb:.1f} KB)" if file_size_kb > 0 else ""
                 
                 preview_item = Div(
-                    Span(icon_name, cls="material-symbols-outlined emoji-icon text-lg mr-1.5 text-primary/80 flex-shrink-0"),
+                    Span(icon_name, cls="material-icons emoji-icon text-lg mr-1.5 text-primary/80 flex-shrink-0"),
                     Span(f"{att_info.get('filename', 'N/A')} {size_text}".strip(), cls="text-xs text-base-content/80 truncate"),
                     cls="flex items-center p-1.5 bg-primary/10 rounded"
                 )
@@ -1104,11 +1145,7 @@ async def handle_send_chat_message(req, sess):
     )
 
     user_message_text_encoded = urllib.parse.quote(user_message_text)
-
- 
-    print("================== send_chat_message route - PRINTING   user_message_text_encoded=======================")
-
-    print(user_message_text)
+    log_step("url encoding", f"Encoded for next step: {user_message_text_encoded[:100]}{'...' if len(user_message_text_encoded) > 100 else ''}")
    
 
     
@@ -1137,12 +1174,9 @@ async def load_typing_indicator_handler(req):
     attachment_uuids = req.query_params.get("attachment_uuids", "") # Get the UUIDs string
     ai_bubble_target_id = f"ai-bubble-{time.time_ns()}"
 
-    print("================== load_typing_indicator   - PRINTING user_message_from_query  =======================")
-
-    print(user_message_from_query)        
+    log_step("typing indicator", f"Loading for message: {user_message_from_query[:100]}{'...' if len(user_message_from_query) > 100 else ''}")
 
     attachment_uuids_param = f"&attachment_uuids={attachment_uuids}" if attachment_uuids else ""
-
     user_message_text_encoded = urllib.parse.quote(user_message_from_query)
 
     typing_indicator_bubble = Div(
@@ -1177,15 +1211,8 @@ async def get_ai_actual_response_route(req, sess):
 
     user_message_text = urllib.parse.unquote(get_user_message)
     
-    print("================== /get_ai_actual_response - PRINTING get_user_message =======================")
-
-    print(get_user_message) 
-    print("================== SEEING IF THE PENDING JOURNAL UPDATES HAS NEW ENTRIES  =======================")         
-    print(pending_journal_updates)
-
-    print("================== /get_ai_actual_response - PRINTING  user_message_text =======================")
-
-    print( user_message_text)      
+    log_step("ai response route", f"Processing: {user_message_text[:100]}{'...' if len(user_message_text) > 100 else ''}")
+    log_step("pending journal check", f"Current queue size: {len(pending_journal_updates)}")      
 
 
 
@@ -1195,27 +1222,27 @@ async def get_ai_actual_response_route(req, sess):
     if attachment_uuids_str:
         list_of_uuids = [uid.strip() for uid in attachment_uuids_str.split(',') if uid.strip()]
         if list_of_uuids:
-            print(f"Attempting to retrieve attachments from Supabase for UUIDs: {list_of_uuids}")
+            log_step("attachment retrieval", f"Fetching {len(list_of_uuids)} attachments from Supabase")
             try:
                 response = supabase.table("akasi_base64_image_strings").select("id, base64_string, file_type").in_("id", list_of_uuids).execute()
                 
                 if response.data:
-                    print(f"Retrieved {len(response.data)} attachments from Supabase.")
+                    log_success("attachment retrieval", f"Retrieved {len(response.data)} attachments")
                     for row in response.data:
-
+                        base64_content = row.get('base64_string', '')
+                        log_step("attachment data", f"Processing {row['id']}: {truncate_base64(base64_content)}")
+                        
                         retrieved_attachments_from_supabase.append({
-
                             "filename": f"attachment_{row['id']}.{row['file_type'].split('/')[-1] if row.get('file_type') else 'bin'}",
                             "content_type": row.get('file_type'),
-                            "base64": row.get('base64_string'),
-
+                            "base64": base64_content,
                         })
                 else:
-                    print(f"No data returned from Supabase for UUIDs: {list_of_uuids}. Response: {response}")
+                    log_step("attachment retrieval", f"No data returned for UUIDs: {list_of_uuids}")
             except Exception as e:
-                print(f"Supabase select exception for UUIDs {list_of_uuids}: {e}")
+                log_error("attachment retrieval", e)
         else:
-            print("No valid UUIDs found in attachment_uuids_str.")
+            log_step("attachment retrieval", "No valid UUIDs found")
             
 
 
@@ -1230,10 +1257,7 @@ async def get_ai_actual_response_route(req, sess):
 
     llm_output = await llm_agent_1(user_message_text, attachments_data=retrieved_attachments_from_supabase) 
 
-    print("-------- IM IN THE  /get_ai_actual_response  AFTER THE ai_chat_bubble_component -------------")
-
-
-    # Trigger an async function that takes in the 
+    log_success("ai processing complete", "Generating UI response components")
 
     ai_chat_bubble_component = unified_ui_controller_for_chat_window_and_body_scanner(
         llm_data=llm_output,
@@ -1262,7 +1286,7 @@ async def get_ai_actual_response_route(req, sess):
 
 
 
-@rt('/onboarding/wellness-journal')
+@rt('/onboarding/wellness-journal', methods=['GET'])
 def wellness_journal_page(auth):
     if auth is None:
         return RedirectResponse('/login', status_code=303)
@@ -1330,22 +1354,45 @@ def wellness_journal_page(auth):
     )
 
     chat_input_area = Form(
-        Textarea(
-            id="chat-input",
-            name="message",
-            placeholder="Type your response...",
-            cls="chat-input"
+        # Staged attachments container (initially hidden)
+        Div(id="stagedAttachmentsContainer", cls="hidden p-2 bg-base-100 border-t border-base-300"),
+        
+        Div(
+            Textarea(
+                id="chatInput",
+                name="chatInput",
+                placeholder="Describe your symptoms here...",
+                cls="textarea textarea-bordered flex-grow resize-none scrollbar-thin",
+                rows="1",
+                style="min-height: 44px; max-height: 120px;"
+            ),
+            Input(type="file", name="files", multiple=True, accept="image/*,.pdf,.doc,.docx,.txt,.md", cls="hidden", id="fileInput"),
+            Div(
+                Button(
+                    Span("attach_file", cls="material-icons emoji-icon text-lg"),
+                    type="button",
+                    id="attachButton",
+                    cls="btn btn-ghost btn-sm btn-circle",
+                    title="Attach files",
+                    onclick="document.getElementById('fileInput').click()"
+                ),
+                Button(
+                    Span("send", cls="material-icons emoji-icon text-lg"),
+                    type="submit",
+                    id="sendButton",
+                    cls="btn btn-primary btn-sm btn-circle",
+                    title="Send message"
+                ),
+                cls="flex items-end space-x-1"
+            ),
+            cls="flex items-end space-x-2 p-3 bg-white border-t border-base-300"
         ),
-        Input(type="hidden", name="type", value="user"),
-        Button(
-            Span("➤", cls="send-icon"),
-            id="send-button",
-            type="submit",
-            cls="send-button"
-        ),
-        cls="chat-input-area",
-        hx_post="/htmx/store_chat_message",
-        hx_on_htmx_after_request="this.reset(); document.getElementById('chat-input').style.height='auto'; htmx.trigger('#chat-messages', 'chatHistoryRefresh');"
+        id="chatForm",
+        enctype="multipart/form-data",
+        hx_post="/send_chat_message",
+        hx_target="#messagesArea",
+        hx_swap="beforeend",
+        hx_encoding="multipart/form-data"
     )
 
     left_panel_chatbox = Div(
@@ -1697,7 +1744,7 @@ async def post_journal_action_handler(req): # Renamed for clarity
     action = form_data.get("wellness_journal_entry_action")
     entry_id = form_data.get("wellness_journal_entry_id")
 
-    print(f"HTMX Journal Action Received: {action}, ID: {entry_id}, Form: {form_data}") # For debugging
+    log_step("journal action", f"Action: {action}, ID: {entry_id}")
 
     if action == "REMOVE":
         # The client-side HTMX swap (outerHTML) on the delete button already removes the element.
@@ -1705,7 +1752,7 @@ async def post_journal_action_handler(req): # Renamed for clarity
         # For now, it just acknowledges. If server-side state of entries needs updating, do it here.
         # We might need to send OOB swaps for the placeholder/clear button if the list becomes empty.
         # This is now handled by the htmx:afterSwap JS listener as a simpler client-side check.
-        print(f"Server: REMOVE action for entry ID {entry_id} processed.")
+        log_success("remove action", f"Entry ID {entry_id} removed from server state")
         return "" # Empty response because client-side swap handles DOM.
 
     elif action == "ADD": # This will be used by the manual entry form
@@ -1733,9 +1780,10 @@ async def post_journal_action_handler(req): # Renamed for clarity
 
 @rt("/htmx/get_journal_update")
 def get_journal_update_handler(): 
-    print("--- Entered /htmx/get_journal_update handler ---")
     global pending_journal_updates # Use the primary queue for UI updates
     global pending_journal_updates_2 # Master list, used for context in REMOVE OOB
+    
+    log_step("journal update handler", f"Processing queue (size: {len(pending_journal_updates)})")
 
     rendered_html_component = None
     action_performed = None
@@ -1745,46 +1793,46 @@ def get_journal_update_handler():
     if pending_journal_updates:
         try:
             entry_operation_data = pending_journal_updates.pop(0) 
-            print(f"Debug (get_journal_update_handler): Processing journal operation data: {entry_operation_data}")
             
             if not isinstance(entry_operation_data, dict):
-                print(f"ERROR (get_journal_update_handler): Popped data is not a dictionary: {entry_operation_data}")
+                log_error("journal update", Exception(f"Invalid data type: {type(entry_operation_data)}"))
                 entry_operation_data = None # Invalidate it
             else:
                 action_performed = entry_operation_data.get("wellness_journal_entry_action")
                 processed_entry_id = entry_operation_data.get("wellness_journal_entry_id")
+                log_step("journal operation", f"{action_performed} - ID: {processed_entry_id}")
             
             # Attempt to render if data is suitable for ADD/UPDATE
             if entry_operation_data and action_performed in ["ADD", "UPDATE"]:
-                print(f"Debug (get_journal_update_handler): Attempting to render for action '{action_performed}' with data: {entry_operation_data}")
+                log_step("render component", f"Creating UI for {action_performed}")
                 rendered_html_component = render_single_journal_entry_ft(entry_operation_data)
             elif entry_operation_data and action_performed == "REMOVE" and processed_entry_id:
                 # For REMOVE, create a specific empty component for OOB removal
                 target_id_attr = f"journal-entry-{processed_entry_id}"
                 rendered_html_component = Div(id=target_id_attr, hx_swap_oob="true") 
-                print(f"Debug (get_journal_update_handler): Action REMOVE for ID {processed_entry_id}. Created empty OOB component.")
+                log_step("remove component", f"Created removal component for ID: {processed_entry_id}")
             elif entry_operation_data: # NONE_ACTION or unknown
-                 print(f"Debug (get_journal_update_handler): Action '{action_performed}' for ID {processed_entry_id}. No UI component to render from this handler for this action.")
+                 log_step("unsupported action", f"No handler for action: {action_performed}")
                  # rendered_html_component remains None, will be caught by the guard below.
 
         except IndexError:
-            print("Debug (get_journal_update_handler): pending_journal_updates was or became empty during processing.")
+            log_step("queue empty", "No pending updates to process")
             # entry_operation_data and rendered_html_component remain None
         except Exception as e:
-            print(f"ERROR (get_journal_update_handler): Exception during processing: {e}\n{traceback.format_exc()}")
+            log_error("journal update processing", e)
             # entry_operation_data and rendered_html_component remain None
     else:
-        print("Debug (get_journal_update_handler): pending_journal_updates is empty. No update to send.")
+        log_step("no updates", "Pending journal updates queue is empty")
         # entry_operation_data and rendered_html_component remain None
 
     # CRITICAL GUARD: Check if a component was successfully prepared
     if rendered_html_component is None:
-        print(f"Debug (get_journal_update_handler): rendered_html_component is None before action dispatch. Action was '{action_performed}'. Returning 204.")
+        log_step("no component", f"Nothing to render for action: {action_performed}, returning 204")
         return HTMLResponse(content="", status_code=204)
 
     # --- Action-specific return logic ---
     if action_performed == "ADD":
-        print(f"Debug (get_journal_update_handler): Action ADD for {processed_entry_id}. Returning component directly for 'afterbegin' swap.")
+        log_success("add entry", f"Returning new entry component for ID: {processed_entry_id}")
         return FtResponse(
             content=(
                 rendered_html_component,
@@ -1793,21 +1841,22 @@ def get_journal_update_handler():
             )
         )
     elif action_performed == "UPDATE":
-        print(f"Debug (get_journal_update_handler): Action UPDATE for {processed_entry_id}. Modifying attrs for OOB swap.")
+        log_step("update entry", f"Setting OOB attributes for ID: {processed_entry_id}")
         # Directly modify attributes to set hx-swap-oob, avoiding .With()
         if hasattr(rendered_html_component, 'attrs') and isinstance(rendered_html_component.attrs, dict):
             rendered_html_component.attrs['hx-swap-oob'] = 'true' # kebab-case for HTML attributes
-            print(f"DIAGNOSTIC (UPDATE path - direct attrs): Attributes modified. Returning component.")
+            log_success("update entry", "Component attributes configured for OOB swap")
             return rendered_html_component # Return the modified component for OOB swap
         else:
             # This case should ideally not be hit if render_single_journal_entry_ft always returns a valid FT component
-            print(f"CRITICAL ERROR (get_journal_update_handler - UPDATE): rendered_html_component (type: {type(rendered_html_component)}) lacks .attrs dict or not a dict. ID: {processed_entry_id}")
+            log_error("update entry", Exception(f"Component malformed - type: {type(rendered_html_component)}"))
             return HTMLResponse("Error: Server component malformed for update.", status_code=500)
 
     elif action_performed == "REMOVE": 
         # rendered_html_component here is the empty Div(id=target_id_attr, hx_swap_oob="true")
-        print(f"Debug (get_journal_update_handler): Action REMOVE for {processed_entry_id}. Returning OOB removal component.")
+        log_step("remove entry", f"Removing entry ID: {processed_entry_id}")
         if not pending_journal_updates_2: # Check the master list for emptiness
+             log_step("list empty", "No more entries, showing placeholder")
              return FtResponse(
                 content=(
                     rendered_html_component, 
@@ -1815,10 +1864,11 @@ def get_journal_update_handler():
                     Div(id="clearJournalContainer", style="display: none;", hx_swap_oob="true")
                 )
             )
+        log_success("remove entry", "Entry removed from UI")
         return rendered_html_component # Just the OOB empty div to remove the item
 
     else: 
-        print(f"Warning (get_journal_update_handler): Unhandled action '{action_performed}' or component state. Returning 204.")
+        log_step("unhandled action", f"No handler for action: {action_performed}, returning 204")
         return HTMLResponse(content="", status_code=204)
 
 

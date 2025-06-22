@@ -199,6 +199,38 @@ dialog.modal .modal-box {
   overflow-y: auto; 
 }
 
+/* Attachment staging styles */
+.text-xxs {
+  font-size: 0.65rem;
+  line-height: 0.875rem;
+}
+
+.staged-attachment-item {
+  transition: background-color 0.2s ease-in-out;
+}
+
+.staged-attachment-item:hover {
+  background-color: rgba(163, 163, 163, 0.2);
+}
+
+.staged-attachment-item .remove-btn {
+  opacity: 0.6;
+  transition: opacity 0.2s ease-in-out;
+}
+
+.staged-attachment-item:hover .remove-btn {
+  opacity: 1;
+}
+
+#stagedAttachmentsContainer {
+  border-top: 1px solid #e5e7eb;
+  background-color: #f8fafc;
+}
+
+#stagedAttachmentsContainer:not(.hidden) {
+  animation: slideUp 0.2s ease-out;
+}
+
 /* Add to /css/wellness_journal.css */
 .body-image-glowing {
     animation: imagePulse 1.5s ease-in-out infinite;
