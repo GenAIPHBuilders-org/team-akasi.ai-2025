@@ -338,38 +338,6 @@ model_claude_4_opus = "us.anthropic.claude-opus-4-20250514-v1:0"
 
 # --- LLM Configuration with Extended Thinking Control ---
 
-# --- LLM Configuration Settings ---
-# ENABLE_EXTENDED_THINKING = False  # Set to False to disable Claude 4 extended thinking
-# THINKING_BUDGET_TOKENS = 2000     # Conservative starting point
-
-# # Main LLM for complex reasoning and text processing
-# if ENABLE_EXTENDED_THINKING and "claude-4" in model_claude_4_sonnet:
-#     # Claude 4 with controlled extended thinking
-#     llm = init_chat_model(
-#         model_claude_4_sonnet,
-#         model_provider="bedrock_converse",
-#         region_name='us-west-2',
-#         temperature=0.1,
-#         max_tokens=4000,  # Reduced to prevent massive token usage
-#         model_kwargs={
-#             "thinking": {
-#                 "type": "enabled",
-#                 "budget_tokens": THINKING_BUDGET_TOKENS
-#             }
-#         }
-#     )
-# else:
-#     # Claude 4 without extended thinking or other models
-#     llm = init_chat_model(
-#         model_claude_4_sonnet,
-#         model_provider="bedrock_converse",
-#         region_name='us-west-2',
-#         temperature=0.1,
-#         max_tokens=4000  # Conservative limit
-#     )
-
-# When using Claude 4 its slow use Claude 3.5 or 3.7 instead.
-
 llm = init_chat_model(
     model_2_claude_3_5_sonnet_v2,
     model_provider="bedrock_converse",
@@ -388,7 +356,6 @@ llm_for_image = init_chat_model(
     max_tokens=3000  # Sufficient for image analysis
 )
 
-# print(f"🚀 Akasi.ai LLM System Ready - Claude 4 (thinking: {'on' if ENABLE_EXTENDED_THINKING else 'off'}) + Claude 3.7 (images)")
 
 
 class MedicalAgentState(TypedDict):

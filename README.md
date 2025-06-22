@@ -39,6 +39,60 @@ This repository contains the work of Team Akasi.ai for the GenAI PHBuilders Hack
   </table>
 </div>
 
+## 🗺️ Development Roadmap
+
+### Current State & Next Steps
+The current implementation represents the **foundational architecture** of our multi-agent AI system. While the core features are currently bare bones, they effectively demonstrate the **power and potential of AI agents** in healthcare management. Our development trajectory focuses on evolving from this proof-of-concept into a production-ready, enterprise-grade health platform.
+
+### Core Platform Features
+☑️ **Complete Authentication System** - Secure user registration, login, and session management powered by Supabase  
+☑️ **Intuitive User Interface** - Modern, responsive design using TailwindCSS and DaisyUI with exceptional user experience  
+☑️ **Multi-Step Onboarding** - Seamless user journey from personal information collection to wellness journal setup  
+☑️ **HTMX-Powered Reactive UI** - Dynamic, app-like experience without page reloads  
+☑️ **Wellness Journal System** - Complete CRUD operations for health tracking and symptom logging  
+☑️ **Speech Bubble Chat Interface** - Refined onboarding experience with intuitive conversation flow  
+☑️ **Body Scanner Visualization** - Interactive SVG-based anatomy system with AI-controlled animations  
+
+### AI Agent System (Agent 1 - Health Information Orchestrator)
+☑️ **Empathetic Health Information Gathering** - Structured conversations designed to organize health management chaos  
+☑️ **Medical Image Analysis** - Image summarization for comprehensive health records  
+☑️ **Systematic Wellness Journal Population** - Targeted questioning to build complete health profiles  
+☑️ **Interactive Body Scanner Integration** - AI-controlled visual feedback based on conversation context  
+☑️ **Multi-modal Input Support** - Text, images, and document processing capabilities  
+☑️ **LangGraph Workflow Implementation** - Multi-agent system architecture with state management  
+
+### Currently In Development
+☐ **Agent 2 - Health Data Processor** - Second AI agent for intelligent health data processing  
+☐ **Main Dashboard CRUD Features** - Complete health metrics tracking and visualization  
+☐ **Medication Management System** - Reminder systems and adherence tracking  
+☐ **Agent 1 Optimizations** - Enhanced response accuracy and better context understanding  
+☐ **Health Data Export Tools** - Reporting and data portability features  
+☐ **Integration Layer** - Connecting traditional CRUD operations with Agent 2's intelligent processing  
+
+### AI Agent Evaluation & Quality Assurance
+☐ **Conversation Quality Metrics** - Information extraction accuracy and completion rate tracking  
+☐ **User Intent Analysis** - Categorizing health interactions to optimize conversation flows  
+☐ **Performance Benchmarking** - Structured testing for both agents with defined SLAs  
+☐ **Iterative Optimization** - Data-driven improvements based on real user interaction patterns  
+
+### Critical Infrastructure & Security
+☐ **Healthcare-Grade Security** - Enhanced database security measures for healthcare data protection standards  
+☐ **Data Privacy Compliance** - Comprehensive data encryption, access controls, and audit logging  
+☐ **Database Optimization** - Performance improvements and scalable architecture for sensitive health data  
+☐ **HIPAA-Equivalent Standards** - Enterprise-level security and data protection measures  
+
+### Production Readiness & Compliance
+☐ **NPC Registration Preparation** - Compliance with Philippine data privacy regulations for healthcare applications  
+☐ **Scalable Infrastructure** - Cloud-native architecture supporting thousands of users  
+☐ **Advanced Health Analytics** - Real-time health monitoring and predictive care capabilities  
+☐ **One-Click Deployment** - Containerized deployment with comprehensive documentation  
+
+### Platform Expansion
+☐ **Healthcare Provider Integration** - Professional tools and API ecosystem  
+☐ **Mobile PWA** - Enhanced mobile experience and offline capabilities  
+☐ **Open Source Release** - Feature-complete platform with community contribution guidelines  
+☐ **Proactive Health Features** - Automated reminders, health alerts, and preventive care suggestions
+
 ## 🛠️ Tech Stack & Architecture
 
 Akasi.ai leverages a modern tech stack to deliver an intelligent and responsive health management experience. Our architecture is designed around a multi-agent system to handle various aspects of health data processing and user interaction.
