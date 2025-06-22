@@ -375,7 +375,7 @@ llm = init_chat_model(
     model_provider="bedrock_converse",
     region_name='us-west-2',
     temperature=0.1,
-    max_tokens=1200  # Conservative limit when using claude 4
+    max_tokens=200  # Reduced limit for concise wellness journal responses
 )
 
 
