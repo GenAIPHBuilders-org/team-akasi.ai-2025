@@ -371,7 +371,7 @@ model_claude_4_opus = "us.anthropic.claude-opus-4-20250514-v1:0"
 # When using Claude 4 its slow use Claude 3.5 or 3.7 instead.
 
 llm = init_chat_model(
-    model_claude_3_7_sonnet,
+    model_2_claude_3_5_sonnet_v2,
     model_provider="bedrock_converse",
     region_name='us-west-2',
     temperature=0.1,
@@ -381,7 +381,7 @@ llm = init_chat_model(
 
 # Dedicated LLM for image processing to avoid Claude 4's extended thinking overhead
 llm_for_image = init_chat_model(
-    model_claude_4_sonnet,
+    model_2_claude_3_5_sonnet_v2,
     model_provider="bedrock_converse",
     region_name='us-west-2',
     temperature=0.1,

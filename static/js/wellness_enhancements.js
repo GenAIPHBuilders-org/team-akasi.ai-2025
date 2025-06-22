@@ -197,12 +197,13 @@ function initializeChatHistory() {
     addMessageToHistory('akasi', initialMessage);
 }
 
-function addMessageToHistory(type, message) {
+function addMessageToHistory(type, message, attachments = null) {
     const timestamp = new Date().toLocaleTimeString([], {hour: '2-digit', minute: '2-digit'});
     const messageEntry = {
         type: type, // 'akasi' or 'user'
         message: message,
-        timestamp: timestamp
+        timestamp: timestamp,
+        attachments: attachments // Array of attachment info or null
     };
     
     conversationHistory.push(messageEntry);
@@ -234,10 +235,37 @@ function renderChatHistory() {
 
     const messagesHTML = conversationHistory.map(entry => {
         const messageClass = entry.type === 'akasi' ? 'akasi-message' : 'user-message';
+        
+        // Build attachment preview HTML if attachments exist
+        let attachmentHTML = '';
+        if (entry.attachments && entry.attachments.length > 0) {
+            const attachmentPreviews = entry.attachments.map(attachment => {
+                const iconName = getAttachmentIcon(attachment.contentType, attachment.filename);
+                const sizeText = formatFileSize(attachment.size);
+                
+                return `
+                    <div class="chat-history-attachment">
+                        <span class="material-icons attachment-icon">${iconName}</span>
+                        <div class="attachment-details">
+                            <span class="attachment-name" title="${attachment.filename}">${attachment.filename}</span>
+                            <span class="attachment-size">${sizeText}</span>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+            
+            attachmentHTML = `
+                <div class="chat-history-attachments">
+                    ${attachmentPreviews}
+                </div>
+            `;
+        }
+        
         return `
             <div class="chat-message">
                 <div class="${messageClass}">
                     ${entry.message}
+                    ${attachmentHTML}
                     <div class="message-time">${entry.timestamp}</div>
                 </div>
             </div>
@@ -245,6 +273,29 @@ function renderChatHistory() {
     }).join('');
 
     chatMessages.innerHTML = messagesHTML;
+}
+
+// Helper function to get appropriate icon for attachment
+function getAttachmentIcon(contentType, filename) {
+    if (contentType && contentType.startsWith('image/')) {
+        return 'image';
+    } else if (filename && filename.toLowerCase().endsWith('.pdf')) {
+        return 'picture_as_pdf';
+    } else if (filename && filename.toLowerCase().match(/\.(doc|docx)$/)) {
+        return 'description';
+    } else {
+        return 'article';
+    }
+}
+
+// Helper function to format file size
+function formatFileSize(bytes) {
+    if (!bytes) return '0 KB';
+    if (bytes < 1024) return bytes + ' B';
+    const kb = bytes / 1024;
+    if (kb < 1024) return kb.toFixed(1) + ' KB';
+    const mb = kb / 1024;
+    return mb.toFixed(1) + ' MB';
 }
 
 function showChatHistory() {
@@ -297,7 +348,18 @@ function initializeChatMessageMonitoring() {
             const formData = new FormData(chatForm);
             const userMessage = formData.get('chatInput');
             if (userMessage && userMessage.trim()) {
-                addMessageToHistory('user', userMessage.trim());
+                // Capture staged attachments for chat history
+                let attachmentsForHistory = null;
+                if (stagedFilesData && stagedFilesData.length > 0) {
+                    attachmentsForHistory = stagedFilesData.map(stagedFile => ({
+                        filename: stagedFile.file.name,
+                        size: stagedFile.file.size,
+                        type: stagedFile.type,
+                        contentType: stagedFile.file.type
+                    }));
+                }
+                
+                addMessageToHistory('user', userMessage.trim(), attachmentsForHistory);
                 
                 // Add typing indicator to chat history
                 setTimeout(() => {
