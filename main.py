@@ -1291,6 +1291,104 @@ def wellness_journal_page(auth):
     if auth is None:
         return RedirectResponse('/login', status_code=303)
 
+    # Chat history button in top right with Google Material Icon
+    chat_history_button = Button(
+        Span("chat", cls="material-icons"),
+        id="chat-history-button",
+        cls="chat-history-button",
+        title="View conversation history"
+    )
+
+    # Body scanner button below chat history button  
+    body_scanner_button = Button(
+        Span("accessibility", cls="material-icons"),
+        id="body-scanner-button", 
+        cls="body-scanner-button",
+        title="Open body scanner"
+    )
+
+    # Combined Akasi component (speech bubble + floating ball as one unit)
+    # Changed heart icon to activity icon for wellness journal
+    akasi_component = Div(
+        # Speech bubble positioned relative to this wrapper
+        Div(
+            "Hi there! I'm Akasi, your personal wellness assistant. I help you track your health by building a wellness journal. I've activated my body scanner to check how you're doing. Just start by telling me how you feel today. You can also add notes, symptoms, photos, or any medical documents along the way. Let's begin!",
+            id="akasi-speech-bubble",
+            cls="akasi-speech-bubble show"
+        ),
+        # Floating ball with medical icon instead of heart
+        Div(
+            Span("medical_services", cls="material-icons medical-icon"),  # Medical/doctor icon
+            cls="akasi-floating-ball"
+        ),
+        cls="akasi-component"  # New wrapper class for the combined component
+    )
+
+    # Chat input area (positioned at bottom of screen) - maintains HTMX functionality
+    chat_input_area = Form(
+        # Staged attachments container (initially hidden)
+        Div(id="stagedAttachmentsContainer", cls="hidden p-2 bg-white/20 border-t border-white/30 rounded-t"),
+        
+        Div(
+            Textarea(
+                id="chatInput",
+                name="chatInput",
+                placeholder="Describe your symptoms here...",
+                cls="chat-input",  # Using personal-info styles
+            ),
+            Input(type="file", name="files", multiple=True, accept="image/*,.pdf,.doc,.docx,.txt,.md", cls="hidden", id="fileInput"),
+            Div(
+                Button(
+                    Span("attach_file", cls="material-icons"),
+                    type="button",
+                    id="attachButton",
+                    cls="attachment-button",
+                    title="Attach files",
+                    onclick="document.getElementById('fileInput').click()"
+                ),
+                Button(
+                    Span("➤", cls="send-icon"),
+                    type="submit",
+                    id="sendButton",
+                    cls="send-button",
+                    title="Send message"
+                ),
+                cls="flex items-center gap-3"
+            ),
+            cls="chat-input-container"
+        ),
+        id="chatForm",
+        cls="chat-input-area",  # Using personal-info layout
+        enctype="multipart/form-data",
+        hx_post="/send_chat_message",
+        hx_target="#messagesArea",
+        hx_swap="beforeend",
+        hx_encoding="multipart/form-data"
+    )
+
+    # Chat history modal - similar to personal-info but adapted for wellness journal
+    chat_history_modal = Div(
+        Div(
+            Div(
+                H2("Chat History", cls="chat-history-title"),
+                Button(
+                    Span("close", cls="material-icons"),
+                    id="close-chat-history",
+                    cls="close-chat-history"
+                ),
+                cls="chat-history-header"
+            ),
+            Div(
+                id="chat-messages",
+                cls="chat-messages"
+            ),
+            cls="chat-history-modal"
+        ),
+        id="chat-history-overlay",
+        cls="chat-history-overlay"
+    )
+
+    # Body scanner modal with SVG and controls
     scan_line_svg_overlay_raw = Svg(
         NotStr(scan_line_svg_defs_raw_string), 
         NotStr(scan_line_group_raw_string),   
@@ -1301,300 +1399,103 @@ def wellness_journal_page(auth):
         style="position: absolute; top: 0; left: 0; z-index: 3; pointer-events: none;" 
     )
 
-
-    chatbox_header = Header(
-        H1("Akasi.ai Chat", cls="text-lg sm:text-xl font-semibold text-center"),
-        Div(
-            Button(
-                Span("refresh", cls="material-icons emoji-icon mr-1"), " Clear Chat",
-                id="clearChatButton",
-                cls="btn btn-xs bg-white/20 hover:bg-white/30 border-none flex items-center gap-1",
-                title="Clear chat history"
-            ),
-            Button(
-                "Add AI Bubble",
-                id="addAIBubbleButton",
-                cls="btn btn-xs bg-white/20 hover:bg-white/30 border-none",
-                title="Add sample AI chat bubble"
-            ),
-            Button(
-                "Add User Bubble",
-                id="addUserBubbleButton",
-                cls="btn btn-xs bg-white/20 hover:bg-white/30 border-none",
-                title="Add sample User chat bubble"
-            ),
-            cls="flex space-x-2 mt-1.5"
-        ),
-        id="chatboxHeader",
-        cls="p-3.5 sm:p-4 shadow-md primary-green-gradient flex flex-col items-center"
-    )
-
-    messages_area = Div(
+    body_scanner_modal = Div(
         Div(
             Div(
+                H2("Body Scanner", cls="body-scanner-title"),
+                Button(
+                    Span("close", cls="material-icons"),
+                    id="close-body-scanner",
+                    cls="close-body-scanner"
+                ),
+                cls="body-scanner-header"
+            ),
+            # Scanner content with new grid layout
+            Div(
+                # Left section: Scanner visualization and controls
                 Div(
                     Div(
-                        Span("smart_toy", cls="material-icons emoji-icon"),
-                        cls="bg-transparent text-neutral-content rounded-full w-8 h-8 text-sm flex items-center justify-center"
+                        main_anatomy_svg_ft,
+                        scan_line_svg_overlay_raw,
+                        cls="scanner-visual-container"
                     ),
-                    cls="avatar placeholder p-0 w-8 h-8 rounded-full mr-2 bg-base-300"
+                    Div(
+                        P("Scanner idle. Describe symptoms or restart.", id="scannerStatusText", cls="scanner-status-text"),
+                        Span("💤", id="scannerStatusIconContainer", cls="scanner-status-icon"),
+                        cls="scanner-status"
+                    ),
+                    Div(
+                        Button("Restart Scan", id="restartScanButton", cls="btn btn-outline btn-sm"),
+                        Button("Narrow Scan", id="narrowScanButton", cls="btn btn-primary btn-sm"),
+                        cls="scanner-controls"
+                    ),
+                    cls="scanner-left-section"
                 ),
+                # Right section: Wellness journal entries
                 Div(
-                    P("Hi there! Im Akasi, your personal wellness assistant. I help you track your health by building a wellness journal. I've activated my body scanner to check how you're doing. Just start by telling me how you feel today. You can also add notes, symptoms, photos, or any medical documents along the way. Lets begin!", cls="text-sm leading-relaxed chat-message-text"),
-                    cls="chat-bubble chat-bubble-neutral bg-base-300 text-base-content rounded-bl-none shadow-md"
+                    H3("Wellness Journal", cls="journal-title"),
+                    Div(
+                        id="journalEntriesList",
+                        cls="journal-entries-list"
+                    ),
+                    Div( # Placeholder for when no entries exist
+                        Span("info_outline", cls="material-icons journal-placeholder-icon"),
+                        P("No entries yet.", cls="journal-placeholder-text"),
+                        P("Entries from chat will appear here.", cls="journal-placeholder-subtext"),
+                        id="noJournalEntries",
+                        cls="journal-placeholder",
+                        style="display: flex;" # Initially visible as the list is empty
+                    ),
+                    Div(
+                        Button(
+                            Span("add", cls="material-icons"), " Add Entry",
+                            id="addManualEntryButton",
+                            cls="btn btn-sm btn-primary add-manual-entry-btn"
+                        ),
+                        Button(
+                            Span("delete_sweep", cls="material-icons"), " Clear All",
+                            id="clearAllJournalButton",
+                            cls="btn btn-xs btn-outline btn-error clear-journal-btn",
+                            hx_post="/htmx/clear_journal",
+                            hx_confirm="Are you sure you want to clear all journal entries?",
+                            style="display: none;" # Initially hidden
+                        ),
+                        cls="journal-buttons-container"
+                    ),
+                    Div(
+                        Button(
+                            Span("menu_book", cls="material-icons"), " Finish Wellness Journal",
+                            id="finishJournalButton",
+                            cls="btn btn-sm btn-primary finalize-journal-btn",
+                            hx_post="/finalize-wellness-journal",
+                            hx_target="#diaryLoadingOverlay",
+                            hx_swap="innerHTML",
+                            title="Complete and save your wellness journal"
+                        ),
+                        cls="mt-4 text-center"
+                    ),
+                    cls="journal-section"
                 ),
-                cls="flex items-end max-w-xs sm:max-w-md md:max-w-lg"
+                cls="scanner-content"
             ),
-            cls="flex justify-start chat-message-container animate-slideUp"
+            cls="body-scanner-modal"
         ),
-        
+        id="body-scanner-overlay", 
+        cls="body-scanner-overlay"
+    )
 
+    # Hidden messages area for HTMX updates (not visible in new layout)
+    messages_area = Div(
         id="messagesArea",
-        cls="flex-grow p-3 sm:p-4 space-y-3 overflow-y-auto bg-base-200 scrollbar-thin"
+        style="display: none;"  # Hidden in new layout
     )
 
-    chat_input_area = Form(
-        # Staged attachments container (initially hidden)
-        Div(id="stagedAttachmentsContainer", cls="hidden p-2 bg-base-100 border-t border-base-300"),
-        
-        Div(
-            Textarea(
-                id="chatInput",
-                name="chatInput",
-                placeholder="Describe your symptoms here...",
-                cls="textarea textarea-bordered flex-grow resize-none scrollbar-thin",
-                rows="1",
-                style="min-height: 44px; max-height: 120px;"
-            ),
-            Input(type="file", name="files", multiple=True, accept="image/*,.pdf,.doc,.docx,.txt,.md", cls="hidden", id="fileInput"),
-            Div(
-                Button(
-                    Span("attach_file", cls="material-icons emoji-icon text-lg"),
-                    type="button",
-                    id="attachButton",
-                    cls="btn btn-ghost btn-sm btn-circle",
-                    title="Attach files",
-                    onclick="document.getElementById('fileInput').click()"
-                ),
-                Button(
-                    Span("send", cls="material-icons emoji-icon text-lg"),
-                    type="submit",
-                    id="sendButton",
-                    cls="btn btn-primary btn-sm btn-circle",
-                    title="Send message"
-                ),
-                cls="flex items-end space-x-1"
-            ),
-            cls="flex items-end space-x-2 p-3 bg-white border-t border-base-300"
-        ),
-        id="chatForm",
-        enctype="multipart/form-data",
-        hx_post="/send_chat_message",
-        hx_target="#messagesArea",
-        hx_swap="beforeend",
-        hx_encoding="multipart/form-data"
-    )
-
-    left_panel_chatbox = Div(
-        Div(
-            chatbox_header,
-            messages_area,
-            chat_input_area,
-            id="chatboxRoot",
-            cls="flex flex-col h-full bg-base-100 text-base-content rounded-lg shadow-xl overflow-hidden border border-base-300"
-        ),
-        cls="w-full md:w-2/5 lg:w-1/3 h-1/2 md:h-full flex flex-col"
-    )
-
-    scanner_visual_container = Div(
-
-        main_anatomy_svg_ft,
-        scan_line_svg_overlay_raw,
-        cls="border-2 border-emerald-500 rounded-lg bg-white/10 flex items-center justify-center relative overflow-hidden",
-        style=f"width: 350px; height: 500px;"
-    )
-
-
-    scanner_main_area_content = Div(
-        Div(
-            scanner_visual_container,
-            Div(
-                Div(
-                    P("Scanner idle. Describe symptoms or restart. ", id="scannerStatusText", cls="text-base-content text-sm"),
-                    Span("💤", id="scannerStatusIconContainer", cls="mt-1 text-xl text-primary  h-6 w-6 flex items-center justify-center"),
-                    id="scannerStatusContainer",
-                    cls="flex flex-col items-center justify-center h-full"
-                ),
-                cls="text-center h-10 w-full max-w-xs mb-3 mt-6" # mb-3 provides some space above bottom buttons
-            ),
-            cls="flex flex-col items-center justify-center flex-grow w-full " # This wrapper grows and centers its content
-        ),
-        Div(
-            Button("Restart Scan", id="restartScanButton", cls="btn btn-outline btn-sm w-full mb-2"),
-            Button(
-                Span("menu_book", cls="material-icons emoji-icon"), " Finish Wellness Journal",
-                id="finishJournalButton",
-                cls="btn btn-sm w-full flex items-center justify-center gap-2 primary-green-gradient",
-                hx_post="/finalize-journal",         # New endpoint to handle this action
-                hx_target="#diaryLoadingOverlay",    # Target the existing overlay
-                hx_swap="innerHTML"                  # Replace its content with the response
-            ),
-            cls="w-full max-w-xs flex flex-col items-center"
-        ),
-        cls="flex flex-col flex-grow h-full p-4 md:p-6 items-center justify-between relative"
-    )
-
-
-    journal_entries_list_items = [
-        Div(
-            Div(
-                H3("Headache", cls="font-medium text-base-content/90 text-sm"),
-                Span("Medium", cls="text-xs font-semibold px-2 py-0.5 rounded-full border text-yellow-700 border-yellow-400 bg-yellow-100"),
-                cls="flex justify-between items-start mb-1"
-            ),
-            P("Dull ache reported across the forehead area.", cls="text-base-content/80 text-xs mb-1.5 leading-relaxed"),
-            P("5/17/2025", cls="text-base-content/70 text-xs text-right"),
-            cls="bg-base-100/80 backdrop-blur-sm rounded-lg p-3 shadow-md hover:shadow-lg transition-shadow border border-base-300/80"
-        ),
-        Div(
-            Div(
-                H3("Knee Pain (Right)", cls="font-medium text-base-content/90 text-sm"),
-                Span("Low", cls="text-xs font-semibold px-2 py-0.5 rounded-full border text-green-700 border-green-400 bg-green-100"),
-                cls="flex justify-between items-start mb-1"
-            ),
-            P("Slight discomfort in the right knee after physical activity.", cls="text-base-content/80 text-xs mb-1.5 leading-relaxed"),
-            P("5/16/2025", cls="text-base-content/70 text-xs text-right"),
-            cls="bg-base-100/80 backdrop-blur-sm rounded-lg p-3 shadow-md hover:shadow-lg transition-shadow border border-base-300/80"
-        ),
-        Div(
-            Div(
-                H3("Sleep Quality", cls="font-medium text-base-content/90 text-sm"),
-                Span("High", cls="text-xs font-semibold px-2 py-0.5 rounded-full border text-red-700 border-red-400 bg-red-100"),
-                cls="flex justify-between items-start mb-1"
-            ),
-            P("Reports difficulty falling asleep and staying asleep.", cls="text-base-content/80 text-xs mb-1.5 leading-relaxed"),
-            P("5/15/2025", cls="text-base-content/70 text-xs text-right"),
-            cls="bg-base-100/80 backdrop-blur-sm rounded-lg p-3 shadow-md hover:shadow-lg transition-shadow border border-base-300/80"
-        ),
-        Div(
-            Div(
-                H3("Overall Energy", cls="font-medium text-base-content/90 text-sm"),
-                Span("Medium", cls="text-xs font-semibold px-2 py-0.5 rounded-full border text-yellow-700 border-yellow-400 bg-yellow-100"),
-                cls="flex justify-between items-start mb-1"
-            ),
-            P("Feeling generally okay, but some afternoon sluggishness noted.", cls="text-base-content/80 text-xs mb-1.5 leading-relaxed"),
-            P("5/14/2025", cls="text-base-content/70 text-xs text-right"),
-            cls="bg-base-100/80 backdrop-blur-sm rounded-lg p-3 shadow-md hover:shadow-lg transition-shadow border border-base-300/80"
-        ),
-        Div(
-            Span("warning", id="noJournalIconContainer", cls="material-icons mb-2 text-4xl"),
-            P("No entries yet.", cls="text-sm"),
-            P("Symptoms you describe will appear here.", cls="text-xs mt-1"),
-            id="noJournalEntries",
-            cls="flex flex-col items-center justify-center h-full text-base-content/70 text-center py-6",
-            style="display: none;"
-        )
-    ]
-
-    journal_entries_panel = Div(
-        Div(
-            H2("Wellness Journal", cls="text-md font-semibold text-center flex-grow"),
-            Button(
-                Span("add", cls="material-icons emoji-icon text-lg"),
-                id="addManualEntryButton",
-                cls="btn btn-xs btn-circle btn-ghost",
-                title="Add Manual Entry"
-            ),
-            cls="p-3.5 border-b border-primary/60 primary-green-gradient flex justify-between items-center"
-        ),
-        Div(
-            id="journalEntriesList",
-            cls="flex-grow overflow-y-auto p-3 space-y-2.5 scrollbar-thin"
-        ),
-        Div( # Placeholder for when no entries exist
-            Span("info_outline", id="noJournalIconContainer", cls="material-icons mb-2 text-4xl text-base-content/50"),
-            P("No entries yet.", cls="text-sm text-base-content/70"),
-            P("Entries from chat or manual additions will appear here.", cls="text-xs mt-1 text-base-content/60"),
-            id="noJournalEntries",
-            cls="flex flex-col items-center justify-center h-full text-center py-6",
-            style="display: flex;" # Initially visible as the list is empty
-        ),
-        Div( # Clear All Button Container
-            Button(
-                Span("delete_sweep", cls="material-icons emoji-icon mr-1"), " Clear All",
-                id="clearAllJournalButton",
-                cls="btn btn-xs btn-outline btn-error flex items-center gap-1.5",
-                title="Clear all journal entries",
-                hx_post="/htmx/clear_journal",
-                # The response from /htmx/clear_journal will handle OOB swaps
-                # for #journalEntriesList, #noJournalEntries, and #clearJournalContainer
-                hx_confirm="Are you sure you want to clear all journal entries?" # Optional confirmation
-            ),
-            id="clearJournalContainer",
-            cls="p-2.5 border-t border-primary/30 flex justify-end",
-            style="display: none;" # Initially hidden, JS/HTMX will show it when entries exist
-        ),
-        cls="w-full md:w-2/5 lg:w-1/3 h-full border-l border-primary/30 flex flex-col bg-base-100/50"
-    )
-
- 
-
-
-    # This Div is crucial for HTMX to receive journal updates triggered by the server
-    journal_update_event_handler_div = Div(
-        id="journalUpdateEventHandler", 
-        hx_get="/htmx/get_journal_update",
-        hx_trigger="loadJournalUpdate from:body", # Listens for 'loadJournalUpdate' event on the body
-        hx_target="#journalEntriesList",          # The new entry HTML will go here
-        hx_swap="afterbegin",                     # Prepend it to the list
-        # This div itself can be empty and hidden; it's a mechanism.
-    )
-
-    right_panel_scanner_journal_root = Div(
-        scanner_main_area_content,
-        journal_entries_panel,
-        id="scannerJournalRoot",
-        cls="flex flex-col md:flex-row w-full h-full text-base-content rounded-lg shadow-xl overflow-hidden subtle-green-gradient-bg border border-base-300"
-    )
-
-    right_panel_wrapper = Div(
-        right_panel_scanner_journal_root,
-        cls="w-full md:w-3/5 lg:w-2/3 h-1/2 md:h-full flex"
-    )
-
-    page_content = Div(
-        left_panel_chatbox,
-        right_panel_wrapper,
-        journal_update_event_handler_div,
-        cls="flex flex-col md:flex-row h-full text-base-content p-2 sm:p-4 gap-2 sm:gap-4 font-sans"
-    )
-
-    narrow_scan_modal = Dialog(
-        Div(
-            Form(
-                Button(
-                    Span("close", cls="material-icons emoji-icon"),
-                    id="closeNarrowScanModalButton",
-                    cls="btn btn-sm btn-circle btn-ghost absolute right-2 top-2"
-                ),
-                method="dialog"
-            ),
-            H3("Specify Narrow Scan Target", cls="font-bold text-lg mb-3"),
-            Input(type="text", id="narrowScanInput", placeholder="E.g., Head, Lungs, Arm", cls="input input-bordered w-full mb-3"),
-            Button("Confirm & Scan", id="confirmNarrowScanButton", cls="btn btn-primary w-full"),
-            cls="modal-box"
-        ),
-        Form(Button("close"), method="dialog", cls="modal-backdrop"),
-        id="narrowScanModal", cls="modal"
-    )
-
-    # --- Manual Entry Modal (Updated for HTMX submission) ---
+    # Manual entry modal (preserve existing functionality)
     manual_entry_modal = Dialog(
         Div( # Modal Box
             Form( # For DaisyUI 'X' button to close via method="dialog"
                 Button(
-                    Span("close", cls="material-icons emoji-icon"), 
-                    # id="closeManualEntryModalButtonInternal" # JS will target this if needed
+                    Span("close", cls="material-icons"), 
                     cls="btn btn-sm btn-circle btn-ghost absolute right-2 top-2"
                 ), 
                 method="dialog" # This form closes the dialog
@@ -1623,7 +1524,28 @@ def wellness_journal_page(auth):
         Form(Button("close_backdrop", cls="hidden"), method="dialog", cls="modal-backdrop"), # For closing modal by clicking backdrop
         id="manualEntryModal", cls="modal"
     )
-    # --- End of Manual Entry Modal ---
+
+    # Narrow scan modal (preserve existing functionality)
+    narrow_scan_modal = Dialog(
+        Div(
+            Form(
+                Button(
+                    Span("close", cls="material-icons"),
+                    id="closeNarrowScanModalButton",
+                    cls="btn btn-sm btn-circle btn-ghost absolute right-2 top-2"
+                ),
+                method="dialog"
+            ),
+            H3("Specify Narrow Scan Target", cls="font-bold text-lg mb-3"),
+            Input(type="text", id="narrowScanInput", placeholder="E.g., Head, Lungs, Arm", cls="input input-bordered w-full mb-3"),
+            Button("Confirm & Scan", id="confirmNarrowScanButton", cls="btn btn-primary w-full"),
+            cls="modal-box"
+        ),
+        Form(Button("close"), method="dialog", cls="modal-backdrop"),
+        id="narrowScanModal", cls="modal"
+    )
+
+    # Loading overlay for finalization
     diary_loading_overlay = Div(
         Span("refresh", id="diaryLoadingIconContainer", cls="material-icons text-emerald-400 mb-6 text-5xl animate-subtle-spin"),
         H2("We are building your health diary...", cls="text-white text-2xl font-semibold mb-3"),
@@ -1636,25 +1558,51 @@ def wellness_journal_page(auth):
         style="display: none;"
     )
 
+    # Main onboarding container (matches personal-info structure)
+    onboarding_container = Div(
+        akasi_component,  # Using the combined component instead of separate elements
+        cls="onboarding-container"
+    )
+
+    # This Div is crucial for HTMX to receive journal updates triggered by the server
+    journal_update_event_handler_div = Div(
+        id="journalUpdateEventHandler", 
+        hx_get="/htmx/get_journal_update",
+        hx_trigger="loadJournalUpdate from:body", # Listens for 'loadJournalUpdate' event on the body
+        hx_target="#journalEntriesList",          # The new entry HTML will go here
+        hx_swap="afterbegin",                     # Prepend it to the list
+        # This div itself can be empty and hidden; it's a mechanism.
+    )
+
     toast_container = Div(id="toastContainer", cls="toast toast-top toast-center z-[200]")
     script_runner_area = Div(id="script_runner_area")
 
-    full_page_wrapper = Div(
-        page_content,
-        narrow_scan_modal,
+    # Full page wrapper with gradient background (matches personal-info structure)
+    page_wrapper = Div(
+        chat_history_button,
+        body_scanner_button,  # New button below chat history
+        onboarding_container,
+        chat_input_area,
+        messages_area,  # Hidden but needed for HTMX
+        chat_history_modal,
+        body_scanner_modal,  # New modal for body scanner and journal
         manual_entry_modal,
+        narrow_scan_modal,
         diary_loading_overlay,
+        journal_update_event_handler_div,
         toast_container,
-        script_runner_area, 
-        cls="h-screen"
+        script_runner_area,
+        cls="onboarding-gradient-bg wellness-journal-bg"  # Added wellness-specific class
     )
-
+    
     return (
         Title("Wellness Journal - Akasi.ai"),
-        google_material_icons_link,
-        wellness_journal_css_link,
-        wellness_enhancements_js_link,
-        full_page_wrapper
+        Link(href="https://fonts.googleapis.com/icon?family=Material+Icons", rel="stylesheet"),
+        Link(rel="stylesheet", href="/css/onboarding_conversation.css"),  # Reuse personal-info CSS
+        Link(rel="stylesheet", href="/css/wellness_journal.css"),  # Add wellness-specific CSS
+        Script(src="/js/wellness_journal.js", defer=True),        # Minimal base functionality
+        Script(src="/js/wellness_enhancements.js", defer=True),   # Main wellness functionality
+        page_wrapper
     )
 
 
@@ -1733,6 +1681,45 @@ def js_show_narrow_scan_modal_script():
     })();
     """
     return Script(js_code)
+
+# New route for finalize journal with redirect to home
+@rt('/finalize-wellness-journal')
+def post_finalize_wellness_journal():
+    # Define the HTML content for the loading screen
+    loading_elements_tuple = (
+        Span("hourglass_empty", cls="material-icons text-emerald-400 mb-6 text-5xl animate-spin"),
+        H2("Just a moment! Your Wellness Journey continues", cls="text-white text-2xl font-semibold mb-3 text-center px-4"),
+        P(
+            "Akasi has successfully compiled your wellness journal. Taking you to your personalized health dashboard...",
+            cls="text-center text-gray-300 text-lg max-w-md px-4"
+        )
+    )
+
+    # JavaScript to run after the new content is swapped in
+    js_to_run_on_client = """
+    (function() {
+        const overlay = document.getElementById('diaryLoadingOverlay');
+        if (overlay) {
+            overlay.style.display = 'flex'; 
+
+            // Optional: Re-trigger fade-in animation
+            overlay.classList.remove('animate-fadeIn');
+            void overlay.offsetWidth; // Force browser reflow/repaint
+            overlay.classList.add('animate-fadeIn');
+            
+            console.log("Wellness journal finalized. Redirecting to /home in 3 seconds.");
+        } else {
+            console.error("diaryLoadingOverlay not found!");
+        }
+
+        // Set a timeout to redirect to /home after 3 seconds
+        setTimeout(function() {
+            window.location.href = '/home';
+        }, 3000);
+    })();
+    """
+    
+    return loading_elements_tuple, Script(js_to_run_on_client)
 
 
 
