@@ -144,7 +144,7 @@ function slowDownAkasiAnimations() {
 
 
 // ========================================
-// CHAT HISTORY FUNCTIONALITY (from personal-info)
+// CHAT HISTORY FUNCTIONALITY (SIMPLIFIED)
 // ========================================
 
 function initializeChatHistoryElements() {
@@ -189,8 +189,6 @@ function initializeChatHistoryElements() {
             }
         });
     }
-
-    console.log("Chat history and body scanner elements initialized");
 }
 
 function initializeChatHistory() {
@@ -251,17 +249,11 @@ function renderChatHistory() {
 
 function showChatHistory() {
     if (chatHistoryOverlay) {
-        // Render the chat history
         renderChatHistory();
-        
-        // Show the overlay with animation
         chatHistoryOverlay.style.display = 'block';
-        // Force a reflow to ensure the display change takes effect
         chatHistoryOverlay.offsetHeight;
-        // Add the show class for animation
         chatHistoryOverlay.classList.add('show');
         
-        // Scroll to bottom after a short delay to allow messages to load
         setTimeout(() => {
             if (chatMessages) {
                 chatMessages.scrollTop = chatMessages.scrollHeight;
@@ -272,10 +264,7 @@ function showChatHistory() {
 
 function hideChatHistory() {
     if (chatHistoryOverlay) {
-        // Remove show class for animation
         chatHistoryOverlay.classList.remove('show');
-        
-        // Hide after animation completes
         setTimeout(() => {
             chatHistoryOverlay.style.display = 'none';
         }, 300);
@@ -283,21 +272,82 @@ function hideChatHistory() {
 }
 
 function updateChatHistoryIfOpen() {
-    // Check if chat history modal is currently visible/open
     if (chatHistoryOverlay && 
         chatHistoryOverlay.style.display === 'block' && 
         chatHistoryOverlay.classList.contains('show')) {
         
-        // Re-render the chat history to include the new message
         renderChatHistory();
-        
-        // Auto-scroll to bottom to show the latest message
         setTimeout(() => {
             if (chatMessages) {
                 chatMessages.scrollTop = chatMessages.scrollHeight;
             }
-        }, 50); // Small delay to ensure DOM update
+        }, 50);
     }
+}
+
+// ========================================
+// SIMPLIFIED CHAT MONITORING
+// ========================================
+
+function initializeChatMessageMonitoring() {
+    // Monitor form submissions for user messages
+    const chatForm = document.getElementById('chatForm');
+    if (chatForm) {
+        chatForm.addEventListener('submit', function(event) {
+            const formData = new FormData(chatForm);
+            const userMessage = formData.get('chatInput');
+            if (userMessage && userMessage.trim()) {
+                addMessageToHistory('user', userMessage.trim());
+                
+                // Add typing indicator to chat history
+                setTimeout(() => {
+                    addMessageToHistory('akasi', 'Akasi is typing...');
+                }, 500);
+                
+                slowDownAkasiAnimations();
+            }
+        });
+    }
+
+    // Monitor speech bubble content changes directly
+    const speechContent = document.getElementById('akasi-speech-content');
+    if (speechContent) {
+        const observer = new MutationObserver(() => {
+            const currentText = speechContent.textContent?.trim();
+            if (currentText && 
+                currentText.length > 10 && 
+                !currentText.includes('Akasi is typing') &&
+                !currentText.includes('I didn\'t receive any message') &&
+                !isMessageAlreadyInHistory(currentText)) {
+                
+                // Replace the last "typing" message if it exists
+                if (conversationHistory.length > 0 && 
+                    conversationHistory[conversationHistory.length - 1].message === 'Akasi is typing...') {
+                    conversationHistory[conversationHistory.length - 1] = {
+                        type: 'akasi',
+                        message: currentText,
+                        timestamp: new Date().toLocaleTimeString([], {hour: '2-digit', minute: '2-digit'})
+                    };
+                } else {
+                    addMessageToHistory('akasi', currentText);
+                }
+                
+                // Save to localStorage
+                localStorage.setItem('wellness_chat_history', JSON.stringify(conversationHistory));
+                updateChatHistoryIfOpen();
+            }
+        });
+        
+        observer.observe(speechContent, {
+            childList: true,
+            subtree: true,
+            characterData: true
+        });
+    }
+}
+
+function isMessageAlreadyInHistory(messageText) {
+    return conversationHistory.some(entry => entry.message === messageText);
 }
 
 // ========================================
@@ -307,12 +357,9 @@ function updateChatHistoryIfOpen() {
 function showBodyScannerModal() {
     if (bodyScannerOverlay) {
         bodyScannerOverlay.style.display = 'block';
-        // Force a reflow to ensure the display change takes effect
         bodyScannerOverlay.offsetHeight;
-        // Add the show class for animation
         bodyScannerOverlay.classList.add('show');
         
-        // Start the body scanner animation automatically when modal opens
         setTimeout(() => {
             startBodyScanAnimation();
         }, 500);
@@ -321,124 +368,12 @@ function showBodyScannerModal() {
 
 function hideBodyScannerModal() {
     if (bodyScannerOverlay) {
-        // Remove show class for animation
         bodyScannerOverlay.classList.remove('show');
         
-        // Hide after animation completes
         setTimeout(() => {
             bodyScannerOverlay.style.display = 'none';
-            // Stop scanner animation when modal closes
             stopBodyScanAnimation();
         }, 300);
-    }
-}
-
-// ========================================
-// ENHANCED CHAT MONITORING
-// ========================================
-
-function initializeChatMessageMonitoring() {
-    // Monitor for new chat messages via HTMX afterSwap events (original system)
-    document.body.addEventListener('htmx:afterSwap', function(event) {
-        const messagesArea = document.getElementById('messagesArea');
-        if (messagesArea && (event.target === messagesArea || (messagesArea.contains && messagesArea.contains(event.target)))) {
-            // Extract the latest messages for chat history
-            extractAndSaveNewMessages();
-        }
-        
-        // NEW: Monitor speech bubble content updates for chat history
-        const speechContent = document.getElementById('akasi-speech-content');
-        if (speechContent && event.target === speechContent) {
-            extractSpeechBubbleMessage(event.target);
-        }
-    });
-
-    // Monitor form submissions to capture user messages
-    if (chatFormEl) {
-        chatFormEl.addEventListener('htmx:beforeRequest', function(event) {
-            const formData = new FormData(chatFormEl);
-            const userMessage = formData.get('chatInput');
-            if (userMessage && userMessage.trim()) {
-                addMessageToHistory('user', userMessage.trim());
-                slowDownAkasiAnimations();
-            }
-        });
-
-        chatFormEl.addEventListener('htmx:afterRequest', function(event) {
-            if (event.detail.successful) {
-                // Wait a bit for HTMX to process, then extract AI response
-                setTimeout(() => {
-                    extractLatestAIMessage();
-                }, 500);
-            }
-        });
-    }
-}
-
-function extractAndSaveNewMessages() {
-    // This function attempts to extract messages from the hidden messagesArea
-    // and save them to chat history
-    const messagesArea = document.getElementById('messagesArea');
-    if (!messagesArea) return;
-
-    const allMessages = messagesArea.querySelectorAll('.chat-message-container');
-    if (allMessages.length === 0) return;
-
-    // Get the last message and determine if it's from AI
-    const lastMessage = allMessages[allMessages.length - 1];
-    const messageText = lastMessage.querySelector('.chat-message-text');
-    
-    if (messageText && lastMessage.querySelector('.avatar.placeholder.bg-base-300')) {
-        // This is an AI message
-        const aiText = messageText.textContent.trim();
-        if (aiText && !isMessageAlreadyInHistory(aiText)) {
-            addMessageToHistory('akasi', aiText);
-        }
-    }
-}
-
-function extractLatestAIMessage() {
-    // Alternative method to extract AI messages
-    const messagesArea = document.getElementById('messagesArea');
-    if (!messagesArea) return;
-
-    const aiMessages = messagesArea.querySelectorAll('.chat-bubble-neutral .chat-message-text');
-    if (aiMessages.length > 0) {
-        const lastAIMessage = aiMessages[aiMessages.length - 1];
-        const aiText = lastAIMessage.textContent.trim();
-        if (aiText && !isMessageAlreadyInHistory(aiText)) {
-            addMessageToHistory('akasi', aiText);
-        }
-    }
-}
-
-function isMessageAlreadyInHistory(messageText) {
-    return conversationHistory.some(entry => entry.message === messageText);
-}
-
-// ========================================
-// SPEECH BUBBLE MESSAGE EXTRACTION
-// ========================================
-
-function extractSpeechBubbleMessage(speechContentElement) {
-    if (!speechContentElement) return;
-    
-    // Skip typing indicators and error messages
-    if (speechContentElement.classList.contains('typing-indicator') || 
-        speechContentElement.querySelector('.typing-indicator')) {
-        console.log("Skipping typing indicator for chat history");
-        return;
-    }
-    
-    // Extract AI response from speech bubble
-    const messageText = speechContentElement.textContent?.trim();
-    if (messageText && 
-        !messageText.includes('Akasi is thinking') && 
-        !messageText.includes('I didn\'t receive any message') &&
-        !isMessageAlreadyInHistory(messageText)) {
-        
-        console.log("Adding speech bubble AI response to chat history:", messageText.substring(0, 50) + "...");
-        addMessageToHistory('akasi', messageText);
     }
 }
 
@@ -447,7 +382,7 @@ function extractSpeechBubbleMessage(speechContentElement) {
 // ========================================
 
 function initializeSpeechBubbleForm() {
-    // Use event delegation for Enter key handling - works with dynamic content
+    // Enter key handling
     document.addEventListener('keypress', (e) => {
         const target = e.target;
         if (target && target.id === 'chatInput' && e.key === 'Enter' && !e.shiftKey) {
@@ -459,41 +394,26 @@ function initializeSpeechBubbleForm() {
         }
     });
     
-    // Use event delegation for auto-resize functionality
+    // Auto-resize functionality
     document.addEventListener('input', (e) => {
         const target = e.target;
         if (target && target.id === 'chatInput') {
             autoResizeTextarea(target);
         }
     });
-    
-    // Form submission handling with event delegation
-    document.addEventListener('htmx:beforeRequest', function(event) {
-        if (event.target && event.target.id === 'chatForm') {
-            const formData = new FormData(event.target);
-            const userMessage = formData.get('chatInput');
-            if (userMessage && userMessage.trim()) {
-                slowDownAkasiAnimations();
-            }
-        }
-    });
 }
 
-// Initialize send button listeners for animation control
 function initializeAnimationControlListeners() {
-    // Listen for all send button clicks
+    // Listen for send button clicks
     document.addEventListener('click', function(event) {
-        // Check if clicked element is a send button
         if (event.target.closest('.send-button') || 
             event.target.closest('#sendButton') ||
-            event.target.closest('button[type="submit"]')) {
+            (event.target.closest('button[type="submit"]') && event.target.closest('#chatForm'))) {
             
             const form = event.target.closest('form');
             if (form) {
-                const formData = new FormData(form);
-                const chatInput = formData.get('chatInput') || formData.get('chatInput');
-                
-                if (chatInput && chatInput.trim()) {
+                const chatInput = form.querySelector('#chatInput') || form.querySelector('[name="chatInput"]');
+                if (chatInput && chatInput.value && chatInput.value.trim()) {
                     slowDownAkasiAnimations();
                 }
             }
@@ -511,53 +431,51 @@ function autoResizeTextarea(textarea) {
 function initializeChatAttachmentElements() {
     fileInputEl = document.getElementById('fileInput');
     stagedAttachmentsContainerEl = document.getElementById('stagedAttachmentsContainer');
-    chatFormEl = document.getElementById('chatForm');
     chatInputEl = document.getElementById('chatInput');
+    
+    // Find the chat form
+    chatFormEl = document.getElementById('chatForm') || 
+                 document.querySelector('form[hx-post*="send_chat_speech_bubble"]') ||
+                 document.querySelector('form[action*="send_chat_speech_bubble"]') ||
+                 document.querySelector('.chat-form-wrapper').closest('form');
 
-    // File input already has onclick handler in HTML, so just add change listener
+    // File input change listener
     if (fileInputEl) {
         fileInputEl.addEventListener('change', handleFileSelection);
     }
 
     if (chatFormEl) {
-        // IMPORTANT: Override HTMX's FormData construction
+        // Override HTMX's FormData construction
         chatFormEl.addEventListener('htmx:configRequest', function(event) {
             const formData = new FormData();
 
-            // Get the chatInput element directly from the form that triggered the event
+            // Get the chatInput element
             const currentChatInputElement = event.target.elements.chatInput;
 
             if (currentChatInputElement) {
                 formData.append('chatInput', currentChatInputElement.value);
             } else {
-                console.warn("chatInput element not found by name in the form during htmx:configRequest. Trying by ID from global scope as fallback.");
                 const currentChatInputById = document.getElementById('chatInput');
                 if (currentChatInputById) {
                      formData.append('chatInput', currentChatInputById.value);
                 } else if (chatInputEl) {
                     formData.append('chatInput', chatInputEl.value);
-                    console.warn("Fell back to globally scoped chatInputEl. This might send stale data if OOB swaps occurred.");
-                } else {
-                    console.error("Completely unable to find chatInput to append to FormData.");
                 }
             }
 
             // Append staged files
-            let hasFiles = false;
             stagedFilesData.forEach(stagedFile => {
                 formData.append('files', stagedFile.file, stagedFile.file.name);
-                hasFiles = true;
             });
 
             event.detail.parameters = formData;
 
-            if (hasFiles) {
-                // Let the browser set the Content-Type for FormData (multipart/form-data with boundary)
+            if (stagedFilesData.length > 0) {
                 delete event.detail.headers['Content-Type'];
             }
         });
 
-        // Clear staged files and input after successful HTMX request
+        // Clear staged files after successful request
         chatFormEl.addEventListener('htmx:afterRequest', function(event) {
             if (event.detail.successful) {
                 clearStagedFilesAndInput();
@@ -701,12 +619,7 @@ function initializeScanAnimationElements() {
         });
     }
 
-    console.log("Scan animation elements initialized:",
-        !!scanLineAnimationGroupRawEl,
-        !!generalScannerStatusTextEl,
-        !!mainAnatomySvgFtEl,
-        !!narrowScanModalEl
-    );
+
 
     if (confirmNarrowScanButtonEl && narrowScanModalEl && narrowScanInputEl) {
         confirmNarrowScanButtonEl.addEventListener('click', handleConfirmManualNarrowScan);
@@ -815,9 +728,7 @@ function clearAllEffects() {
 }
 
 function triggerNarrowScanForPart(partName) {
-    console.log(`Attempting narrow scan for: ${partName}`);
     if (!mainAnatomySvgFtEl) {
-        console.error("Main anatomy SVG not found for narrow scan.");
         showToast("Error: Body scanner component not ready.", "error");
         return;
     }
@@ -849,7 +760,6 @@ function triggerNarrowScanForPart(partName) {
         updateScanAnimationVisuals();
         showToast(`Narrow scan: ${foundPart.dataset.name || partName}`, "success");
     } else {
-        console.warn(`Body part "${partName}" not found for narrow scan.`);
         showToast(`Could not locate part: ${partName}. Try general scan.`, "error");
     }
 }
@@ -864,7 +774,6 @@ function handleConfirmManualNarrowScan() {
 }
 
 function startBodyScanAnimation() {
-    console.log("startBodyScanAnimation called");
     clearAllEffects();
 
     globalScanLinePosition = SCAN_START_Y_VIEWBOX;
@@ -877,15 +786,12 @@ function startBodyScanAnimation() {
 }
 
 function stopBodyScanAnimation() {
-    console.log("stopBodyScanAnimation called");
     globalIsLineScanning = false;
     stopScanLineAnimationInterval();
     updateScanAnimationVisuals();
 }
 
 function toggleBodyGlowEffect() {
-    console.log("toggleBodyGlowEffect called (for FT SVG outline pulsate)");
-
     const wasPulsating = globalIsFtBodyOutlinePulsating;
     clearAllEffects();
 
@@ -906,9 +812,7 @@ function toggleBodyGlowEffect() {
 }
 
 function executeBodyScannerCommand(command) {
-    console.log(`Executing body scanner command: ${command}`);
     if (!command || command.trim() === "" || command.toLowerCase() === "idle") {
-        console.log("Scanner command is idle or empty, no action taken.");
         return;
     }
 
@@ -934,7 +838,6 @@ if (typeof showToast === 'undefined') {
     function showToast(message, type = 'info') {
         const toastContainer = document.getElementById('toastContainer');
         if (!toastContainer) {
-            console.error("Toast container not found. Cannot display toast:", message);
             alert(message);
             return;
         }
@@ -1085,14 +988,15 @@ document.body.addEventListener('htmx:afterSwap', function(event) {
 // ========================================
 
 document.addEventListener('DOMContentLoaded', () => {
+    // Initialize all components
     initializeScanAnimationElements();
     initializeChatAttachmentElements();
     initializeJournalModalElements();
     initializeChatHistoryElements();
     initializeChatMessageMonitoring();
-    initializeSpeechBubbleForm(); // NEW: Initialize speech bubble form
-    initializeAnimationControlListeners(); // NEW: Initialize animation control
-    initializeChatHistory(); // Initialize with welcome message
+    initializeSpeechBubbleForm();
+    initializeAnimationControlListeners();
+    initializeChatHistory();
     
     // Delay the start of the body scan animation by 4 seconds
     setTimeout(() => {
@@ -1102,4 +1006,4 @@ document.addEventListener('DOMContentLoaded', () => {
     updateScanAnimationVisuals();
 });
 
-console.log("wellness_enhancements.js loaded (v3.2 - clean animation slowdown).");
+console.log("wellness_enhancements.js loaded (v3.4 - simplified chat history).");
