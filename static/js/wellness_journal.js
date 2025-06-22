@@ -2,9 +2,9 @@
 
 // Utility functions for wellness journal
 function autoResizeTextarea(textarea) {
-    if (!textarea) return;
-    textarea.style.height = 'auto';
-    textarea.style.height = `${Math.max(textarea.scrollHeight, parseInt(getComputedStyle(textarea).minHeight, 10) || 44)}px`;
+  if (!textarea) return;
+  textarea.style.height = 'auto';
+  textarea.style.height = `${Math.max(textarea.scrollHeight, parseInt(getComputedStyle(textarea).minHeight, 10) || 44)}px`;
 }
 
 // Setup basic chat input functionality

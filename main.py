@@ -879,23 +879,23 @@ def render_single_journal_entry_ft(entry_data: dict):
         
         result = Div(
             Div(
-                H3(entry_data.get("wellness_journal_title", "No Title"), cls="font-medium text-base-content/90 text-sm"),
+                H3(entry_data.get("wellness_journal_title", "No Title"), cls="font-medium text-white text-sm mb-1"),
                 Span(severity_info["text"], cls=f"text-xs font-semibold px-2 py-0.5 rounded-full border {severity_info['classes']}"),
-                cls="flex justify-between items-start mb-1"
+                cls="flex justify-between items-start"
             ),
-            P(entry_data.get("wellness_journal_current_summary", "No summary."), cls="text-base-content/80 text-xs mb-1.5 leading-relaxed"),
-            P(formatted_date, cls="text-base-content/70 text-xs text-right"),
+            P(entry_data.get("wellness_journal_current_summary", "No summary."), cls="text-white/90 text-xs mb-2 leading-relaxed"),
+            P(formatted_date, cls="text-white/70 text-xs text-right"),
             Button(
                 Span("delete", cls="material-icons emoji-icon text-sm"), # Smaller icon
                 hx_post="/htmx/journal_entry_action",
                 hx_vals=json.dumps({"wellness_journal_entry_id": str(entry_id_val), "wellness_journal_entry_action": "REMOVE"}),
                 hx_target=f"#{item_id_attr}", # Target self for removal
                 hx_swap="outerHTML",          # Remove the element
-                # Add hx_confirm here if desired: hx_confirm="Are you sure you want to remove this entry?"
-                cls="btn btn-xs btn-circle btn-ghost text-error absolute top-1 right-1 opacity-50 hover:opacity-100",
+                hx_confirm="Are you sure you want to remove this entry?", # Added confirmation
+                cls="btn btn-xs btn-circle btn-ghost text-red-400 hover:text-red-300 absolute top-2 right-2 opacity-60 hover:opacity-100 hover:bg-red-500/20",
                 title="Remove Entry"
             ),
-            cls="bg-base-100/80 backdrop-blur-sm rounded-lg p-3 shadow-md hover:shadow-lg transition-shadow border border-base-300/80 relative animate-fadeIn", # Added animation
+            cls="journal-entry-item", # Use consistent class for CSS targeting
             id=item_id_attr
         )
         
@@ -1095,7 +1095,7 @@ async def handle_send_chat_message(req, sess):
     
     if not user_message_text and not processed_attachments_for_preview:
         # If message and attachments are empty, just return the OOB cleared input
-        return Textarea(id="chatInput", name="chatInput", placeholder="Describe your symptoms here...", cls="textarea textarea-bordered flex-grow resize-none scrollbar-thin", rows="1", style="min-height: 44px; max-height: 120px;", hx_swap_oob="true")
+        return Textarea(id="chatInput", name="chatInput", placeholder="Describe your symptoms here...", cls="chat-input", hx_swap_oob="true")
 
 
     # --- Construct User Chat Bubble with Attachment Previews (using processed_attachments_for_preview) ---
@@ -1161,7 +1161,7 @@ async def handle_send_chat_message(req, sess):
     )
 
     # This OOB swap clears the textarea.
-    cleared_chat_input = Textarea(id="chatInput", name="chatInput", placeholder="Describe your symptoms here...", cls="textarea textarea-bordered flex-grow resize-none scrollbar-thin", rows="1", style="min-height: 44px; max-height: 120px;", hx_swap_oob="true")
+    cleared_chat_input = Textarea(id="chatInput", name="chatInput", placeholder="Describe your symptoms here...", cls="chat-input", hx_swap_oob="true")
  
 
 
@@ -1517,7 +1517,7 @@ def wellness_journal_page(auth):
                 hx_target="#journalEntriesList",      # Target where new entry HTML will be placed
                 hx_swap="afterbegin",                # Prepend the new entry
                 # The server response from /htmx/journal_entry_action (for ADD)
-                # will also include OOB swaps for #noJournalEntries and #clearJournalContainer
+                # will also include OOB swaps for #noJournalEntries and #clearAllJournalButton
             ),
             cls="modal-box"
         ),
@@ -1756,11 +1756,21 @@ async def post_journal_action_handler(req): # Renamed for clarity
         new_entry_ft = render_single_journal_entry_ft(new_entry_data)
         # OOB swaps for placeholder and clear button visibility
         no_entries_div_oob = Div(id="noJournalEntries", style="display: none;", hx_swap_oob="true")
-        clear_button_div_oob = Div(id="clearJournalContainer", style="display: flex;", hx_swap_oob="true")
+        
+        # Show clear button with proper content
+        clear_button_oob = Button(
+            Span("delete_sweep", cls="material-icons"), " Clear All",
+            id="clearAllJournalButton",
+            cls="btn btn-xs btn-outline btn-error clear-journal-btn",
+            hx_post="/htmx/clear_journal",
+            hx_confirm="Are you sure you want to clear all journal entries?",
+            style="display: block;",
+            hx_swap_oob="true"
+        )
 
         # The new_entry_ft is returned to be swapped into the target of the HTMX form submission
         # (which is #journalEntriesList with swap 'afterbegin').
-        return new_entry_ft, no_entries_div_oob, clear_button_div_oob
+        return new_entry_ft, no_entries_div_oob, clear_button_oob
 
     return HtmxResponseHeaders(HX_Reswap="none") # Tell HTMX to do nothing if action not handled
 
@@ -1820,11 +1830,23 @@ def get_journal_update_handler():
     # --- Action-specific return logic ---
     if action_performed == "ADD":
         log_success("add entry", f"Returning new entry component for ID: {processed_entry_id}")
+        
+        # Show clear button with proper content
+        clear_button_oob = Button(
+            Span("delete_sweep", cls="material-icons"), " Clear All",
+            id="clearAllJournalButton",
+            cls="btn btn-xs btn-outline btn-error clear-journal-btn",
+            hx_post="/htmx/clear_journal",
+            hx_confirm="Are you sure you want to clear all journal entries?",
+            style="display: block;",
+            hx_swap_oob="true"
+        )
+        
         return FtResponse(
             content=(
                 rendered_html_component,
                 Div(id="noJournalEntries", style="display: none;", hx_swap_oob="true"),
-                Div(id="clearJournalContainer", style="display: flex;", hx_swap_oob="true")
+                clear_button_oob
             )
         )
     elif action_performed == "UPDATE":
@@ -1844,11 +1866,34 @@ def get_journal_update_handler():
         log_step("remove entry", f"Removing entry ID: {processed_entry_id}")
         if not pending_journal_updates_2: # Check the master list for emptiness
              log_step("list empty", "No more entries, showing placeholder")
+             
+             # Restore the complete placeholder content
+             no_entries_placeholder = Div(
+                 Span("info_outline", cls="material-icons journal-placeholder-icon"),
+                 P("No entries yet.", cls="journal-placeholder-text"),
+                 P("Entries from chat will appear here.", cls="journal-placeholder-subtext"),
+                 id="noJournalEntries",
+                 cls="journal-placeholder",
+                 style="display: flex;",
+                 hx_swap_oob="true"
+             )
+             
+             # Hide clear button
+             clear_button_hidden = Button(
+                 Span("delete_sweep", cls="material-icons"), " Clear All",
+                 id="clearAllJournalButton",
+                 cls="btn btn-xs btn-outline btn-error clear-journal-btn",
+                 hx_post="/htmx/clear_journal",
+                 hx_confirm="Are you sure you want to clear all journal entries?",
+                 style="display: none;",
+                 hx_swap_oob="true"
+             )
+             
              return FtResponse(
                 content=(
                     rendered_html_component, 
-                    Div(id="noJournalEntries", style="display: flex;", hx_swap_oob="true"),
-                    Div(id="clearJournalContainer", style="display: none;", hx_swap_oob="true")
+                    no_entries_placeholder,
+                    clear_button_hidden
                 )
             )
         log_success("remove entry", "Entry removed from UI")
@@ -1869,10 +1914,30 @@ async def post_clear_journal_handler(req): # Changed name
 
     # Return OOB swaps to reset the journal list UI
     empty_journal_list_oob = Div(id="journalEntriesList", hx_swap_oob="true") # Empty its content
-    no_entries_div_oob = Div(id="noJournalEntries", style="display: flex;", hx_swap_oob="true") # Show placeholder
-    clear_button_div_oob = Div(id="clearJournalContainer", style="display: none;", hx_swap_oob="true") # Hide clear button
+    
+    # Restore the complete placeholder content
+    no_entries_div_oob = Div(
+        Span("info_outline", cls="material-icons journal-placeholder-icon"),
+        P("No entries yet.", cls="journal-placeholder-text"),
+        P("Entries from chat will appear here.", cls="journal-placeholder-subtext"),
+        id="noJournalEntries",
+        cls="journal-placeholder",
+        style="display: flex;",
+        hx_swap_oob="true"
+    )
+    
+    # Hide clear button - fix target ID
+    clear_button_oob = Button(
+        Span("delete_sweep", cls="material-icons"), " Clear All",
+        id="clearAllJournalButton",
+        cls="btn btn-xs btn-outline btn-error clear-journal-btn",
+        hx_post="/htmx/clear_journal",
+        hx_confirm="Are you sure you want to clear all journal entries?",
+        style="display: none;",
+        hx_swap_oob="true"
+    )
 
-    return empty_journal_list_oob, no_entries_div_oob, clear_button_div_oob
+    return empty_journal_list_oob, no_entries_div_oob, clear_button_oob
 
 
 @rt('/finalize-journal')

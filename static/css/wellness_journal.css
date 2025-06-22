@@ -637,13 +637,14 @@ dialog.modal .modal-box {
 
 .journal-entries-list {
     flex: 1;
-    max-height: 300px;
+    max-height: 280px; /* Increased from 300px for better proportions */
     overflow-y: auto;
-    margin-bottom: 20px;
-    min-height: 200px;
+    margin-bottom: 24px; /* Increased spacing from buttons below */
+    min-height: 180px; /* Reduced minimum height */
+    padding-right: 4px; /* Add some padding for scrollbar */
 }
 
-/* Custom scrollbar for journal entries */
+/* Custom scrollbar for journal entries - improved styling */
 .journal-entries-list::-webkit-scrollbar {
     width: 6px;
 }
@@ -656,47 +657,53 @@ dialog.modal .modal-box {
 .journal-entries-list::-webkit-scrollbar-thumb {
     background: rgba(255, 255, 255, 0.3);
     border-radius: 3px;
+    transition: background 0.3s ease;
 }
 
 .journal-entries-list::-webkit-scrollbar-thumb:hover {
     background: rgba(255, 255, 255, 0.5);
 }
 
+/* Journal placeholder with better spacing */
 .journal-placeholder {
     display: flex;
     flex-direction: column;
     align-items: center;
     justify-content: center;
-    padding: 30px 20px;
+    padding: 40px 20px; /* Increased padding for better appearance */
     color: rgba(255, 255, 255, 0.7);
     text-align: center;
     height: 100%;
+    min-height: 180px; /* Match the list min-height */
 }
 
 .journal-placeholder-icon {
-    font-size: 2.5rem;
-    margin-bottom: 12px;
+    font-size: 2.8rem; /* Slightly larger icon */
+    margin-bottom: 16px; /* Increased spacing */
     opacity: 0.6;
 }
 
 .journal-placeholder-text {
-    font-size: 15px;
-    margin: 0 0 6px 0;
+    font-size: 16px; /* Slightly larger text */
+    margin: 0 0 8px 0;
     font-weight: 500;
 }
 
 .journal-placeholder-subtext {
-    font-size: 13px;
+    font-size: 14px; /* Slightly larger subtext */
     margin: 0;
     opacity: 0.8;
 }
 
+/* Journal buttons container with better spacing */
 .journal-buttons-container {
     display: flex;
-    gap: 10px;
-    margin-bottom: 16px;
+    gap: 12px; /* Increased gap between buttons */
+    margin-bottom: 20px; /* Increased margin below buttons */
     justify-content: center;
     flex-wrap: wrap;
+    padding-top: 4px; /* Add small top padding for separation */
+    border-top: 1px solid rgba(255, 255, 255, 0.1); /* Subtle separator line */
 }
 
 .add-manual-entry-btn,
@@ -707,6 +714,17 @@ dialog.modal .modal-box {
     backdrop-filter: blur(10px);
     flex: 1;
     min-width: 120px;
+    max-width: 140px;
+    font-size: 13px;
+    font-weight: 500;
+    padding: 8px 12px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
 }
 
 .add-manual-entry-btn:hover,
@@ -730,17 +748,65 @@ dialog.modal .modal-box {
     box-shadow: 0 4px 12px rgba(239, 68, 68, 0.3);
 }
 
+/* Icon sizing consistency */
+.add-manual-entry-btn .material-icons,
+.clear-journal-btn .material-icons {
+    font-size: 16px;
+    line-height: 1;
+}
+
+/* More specific targeting for Clear All button to override DaisyUI styles */
+.journal-buttons-container .btn.btn-xs.btn-outline.btn-error.clear-journal-btn {
+    min-width: 100px;
+    max-width: 120px;
+    font-size: 11px !important;
+    padding: 6px 10px !important;
+    white-space: nowrap !important;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    height: auto !important;
+    line-height: 1.2 !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    gap: 3px !important;
+}
+
+.journal-buttons-container .btn.btn-xs.btn-outline.btn-error.clear-journal-btn .material-icons {
+    font-size: 14px !important;
+    margin-right: 2px;
+}
+
+/* Ensure Add Entry button maintains consistent styling */
+.journal-buttons-container .btn.btn-sm.btn-primary.add-manual-entry-btn {
+    min-width: 100px;
+    max-width: 120px;
+    font-size: 12px;
+    padding: 8px 12px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+}
+
+.journal-buttons-container .btn.btn-sm.btn-primary.add-manual-entry-btn .material-icons {
+    font-size: 15px;
+}
+
 .finalize-journal-btn {
     background: linear-gradient(135deg, #059669 0%, #10b981 100%);
     border: none;
     color: white;
     font-weight: 600;
-    padding: 14px 28px;
+    padding: 16px 32px; /* Increased padding */
     font-size: 15px;
     box-shadow: 0 4px 12px rgba(5, 150, 105, 0.3);
     transition: all 0.3s ease;
     width: 100%;
-    margin-top: 8px;
+    margin-top: 12px; /* Increased top margin */
 }
 
 .finalize-journal-btn:hover {
@@ -858,21 +924,64 @@ dialog.modal .modal-box {
    JOURNAL ENTRY ANIMATIONS
    ======================================== */
 
-/* Individual journal entries in the modal */
-.journal-entries-list > div {
-    background: rgba(255, 255, 255, 0.1);
-    border: 1px solid rgba(255, 255, 255, 0.1);
+/* Unified journal entry styling for both manual and AI-generated entries */
+.journal-entry-item,
+.journal-entries-list > div,
+.journal-entries-list .journal-entry-item {
+    background: rgba(255, 255, 255, 0.1) !important;
+    border: 1px solid rgba(255, 255, 255, 0.1) !important;
     border-radius: 12px;
-    padding: 12px;
-    margin-bottom: 8px;
-    color: white;
+    padding: 14px; /* Increased padding */
+    margin-bottom: 12px; /* Increased spacing between entries */
+    color: white !important;
     transition: all 0.3s ease;
+    position: relative;
+    backdrop-filter: blur(10px);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
 }
 
-.journal-entries-list > div:hover {
-    background: rgba(255, 255, 255, 0.15);
-    border-color: rgba(255, 255, 255, 0.2);
+.journal-entry-item:last-child,
+.journal-entries-list > div:last-child,
+.journal-entries-list .journal-entry-item:last-child {
+    margin-bottom: 8px; /* Reduced margin for last entry */
+}
+
+.journal-entry-item:hover,
+.journal-entries-list > div:hover,
+.journal-entries-list .journal-entry-item:hover {
+    background: rgba(255, 255, 255, 0.15) !important;
+    border-color: rgba(255, 255, 255, 0.2) !important;
     transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+}
+
+/* Ensure text colors are consistent within entries */
+.journal-entry-item h3,
+.journal-entries-list > div h3,
+.journal-entries-list .journal-entry-item h3 {
+    color: white !important;
+}
+
+.journal-entry-item p,
+.journal-entries-list > div p,
+.journal-entries-list .journal-entry-item p {
+    color: rgba(255, 255, 255, 0.9) !important;
+}
+
+/* Delete button styling within entries */
+.journal-entry-item .btn-ghost,
+.journal-entries-list > div .btn-ghost,
+.journal-entries-list .journal-entry-item .btn-ghost {
+    background: transparent !important;
+    border: none !important;
+    color: rgba(239, 68, 68, 0.8) !important;
+}
+
+.journal-entry-item .btn-ghost:hover,
+.journal-entries-list > div .btn-ghost:hover,
+.journal-entries-list .journal-entry-item .btn-ghost:hover {
+    background: rgba(239, 68, 68, 0.2) !important;
+    color: rgba(239, 68, 68, 1) !important;
 }
 
 /* ========================================
@@ -943,6 +1052,9 @@ dialog.modal .modal-box {
     .clear-journal-btn {
         width: 100%;
         min-width: auto;
+        max-width: none;
+        font-size: 14px;
+        padding: 10px 16px;
     }
 }
 
