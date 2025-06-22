@@ -1283,7 +1283,154 @@ async def get_ai_actual_response_route(req, sess):
     return FtResponse(content=tuple(content_tuple), headers=response_headers)
 
 
+# --- NEW SPEECH BUBBLE COMMUNICATION ROUTES ---
 
+@rt("/send_chat_speech_bubble")
+async def handle_send_chat_speech_bubble(req, sess):
+    """
+    Handles chat messages for the Akasi speech bubble interface.
+    Returns typing indicator first, then triggers AI response.
+    """
+    log_step("speech bubble route", "Processing speech bubble chat submission")
+    form_data = await req.form()
+    user_message_text = form_data.get("chatInput", "")
+
+    log_step("speech bubble input", f"Message: {user_message_text[:150]}{'...' if len(user_message_text) > 150 else ''}")
+
+    # Process file attachments (same logic as regular chat)
+    uploaded_file_objects: list[UploadFile] = form_data.getlist("files")
+    attachment_uuids_for_next_step = []
+    
+    if uploaded_file_objects:
+        log_step("speech bubble files", f"Processing {len(uploaded_file_objects)} uploaded files")
+        base64_attachments_list = await process_files_to_base64_list(uploaded_file_objects)
+        
+        if base64_attachments_list:
+            for att_data in base64_attachments_list:
+                if "error" not in att_data and "base64" in att_data:
+                    insert_payload = {
+                        "base64_string": att_data["base64"],
+                        "file_type": att_data.get("content_type"),
+                    }
+                    try:
+                        response = supabase.table("akasi_base64_image_strings").insert(insert_payload).execute()
+                        if response.data and len(response.data) > 0:
+                            new_uuid = response.data[0]['id']
+                            attachment_uuids_for_next_step.append(str(new_uuid))
+                            log_step("speech bubble supabase", f"Stored {att_data.get('filename', 'N/A')} with UUID: {new_uuid}")
+                    except Exception as e:
+                        log_error("speech bubble supabase", e)
+
+    if not user_message_text and not attachment_uuids_for_next_step:
+        # Return error message in speech bubble
+        return Div(
+            "I didn't receive any message. Please type something or attach a file and try again.",
+            cls="akasi-speech-text error-message"
+        )
+
+    # Encode message for URL parameters
+    user_message_text_encoded = urllib.parse.quote(user_message_text)
+    attachment_uuids_str = ",".join(attachment_uuids_for_next_step)
+    attachment_uuids_param = f"&attachment_uuids={attachment_uuids_str}" if attachment_uuids_str else ""
+
+    # Return typing indicator with auto-trigger for AI response
+    typing_indicator_div = Div(
+        Div(
+            Span("Akasi is typing", cls="typing-text"),
+            Div(
+                Span(cls="typing-dot dot-1"),
+                Span(cls="typing-dot dot-2"), 
+                Span(cls="typing-dot dot-3"),
+                cls="typing-dots"
+            ),
+            cls="typing-indicator-content"
+        ),
+        # Auto-trigger AI response after showing typing indicator
+        hx_get=f"/get_speech_bubble_response?user_message={user_message_text_encoded}&target_id=akasi-speech-content{attachment_uuids_param}",
+        hx_trigger="load delay:800ms",  # Show typing for 800ms then get response
+        hx_swap="innerHTML",
+        cls="akasi-speech-text typing-indicator"
+    )
+
+    # Clear the input field via OOB swap
+    cleared_input = Textarea(
+        id="chatInput", 
+        name="chatInput", 
+        placeholder="Describe your symptoms here...", 
+        cls="chat-input", 
+        hx_swap_oob="true"
+    )
+
+    return typing_indicator_div, cleared_input
+
+
+@rt("/get_speech_bubble_response")
+async def get_speech_bubble_response_route(req, sess):
+    """
+    Processes the AI response and returns it for the speech bubble.
+    """
+    get_user_message = req.query_params.get("user_message", "")
+    attachment_uuids_str = req.query_params.get("attachment_uuids", "")
+
+    user_message_text = urllib.parse.unquote(get_user_message)
+    
+    log_step("speech bubble ai", f"Processing: {user_message_text[:100]}{'...' if len(user_message_text) > 100 else ''}")
+
+    # Retrieve attachments from Supabase (same logic as regular chat)
+    retrieved_attachments_from_supabase = []
+    if attachment_uuids_str:
+        list_of_uuids = [uid.strip() for uid in attachment_uuids_str.split(',') if uid.strip()]
+        if list_of_uuids:
+            try:
+                response = supabase.table("akasi_base64_image_strings").select("id, base64_string, file_type").in_("id", list_of_uuids).execute()
+                if response.data:
+                    for row in response.data:
+                        retrieved_attachments_from_supabase.append({
+                            "filename": f"attachment_{row['id']}.{row['file_type'].split('/')[-1] if row.get('file_type') else 'bin'}",
+                            "content_type": row.get('file_type'),
+                            "base64": row.get('base64_string', ''),
+                        })
+            except Exception as e:
+                log_error("speech bubble attachment retrieval", e)
+
+    if not user_message_text and not retrieved_attachments_from_supabase:
+        return Div(
+            "I apologize, but I didn't receive your message properly. Could you please try sending it again?",
+            cls="akasi-speech-text error-message"
+        )
+
+    try:
+        # Process through the same AI agent as regular chat
+        llm_output = await llm_agent_1(user_message_text, attachments_data=retrieved_attachments_from_supabase)
+        ai_response_text = llm_output.get("ai_response", "I apologize, but I'm having trouble processing your request right now. Please try again.")
+
+        # Trigger body scanner command if present
+        scanner_command = llm_output.get('body_scanner_animation_action_comand', "idle")
+        animation_script = None
+        if scanner_command and scanner_command.lower() != "idle":
+            js_command_call = f"executeBodyScannerCommand('{scanner_command}');"
+            animation_script = Script(f"(() => {{ try {{ {js_command_call} }} catch (e) {{ console.error('Error executing scanner command:', e); }} }})();")
+
+        # Return AI response in speech bubble format
+        response_div = Div(
+            ai_response_text,
+            cls="akasi-speech-text ai-response"
+        )
+
+        # Prepare headers for journal update trigger
+        response_headers = {"HX-Trigger": json.dumps({"loadJournalUpdate": True})}
+
+        if animation_script:
+            return FtResponse(content=(response_div, animation_script), headers=response_headers)
+        else:
+            return FtResponse(content=response_div, headers=response_headers)
+
+    except Exception as e:
+        log_error("speech bubble ai processing", e)
+        return Div(
+            "I'm sorry, I encountered an issue while processing your message. Please try again, and if the problem continues, you might want to restart our conversation.",
+            cls="akasi-speech-text error-message"
+        )
 
 
 @rt('/onboarding/wellness-journal', methods=['GET'])
@@ -1310,9 +1457,13 @@ def wellness_journal_page(auth):
     # Combined Akasi component (speech bubble + floating ball as one unit)
     # Changed heart icon to activity icon for wellness journal
     akasi_component = Div(
-        # Speech bubble positioned relative to this wrapper
+        # Speech bubble positioned relative to this wrapper - NOW DYNAMIC
         Div(
-            "Hi there! I'm Akasi, your personal wellness assistant. I help you track your health by building a wellness journal. I've activated my body scanner to check how you're doing. Just start by telling me how you feel today. You can also add notes, symptoms, photos, or any medical documents along the way. Let's begin!",
+            Div(
+                "Hi there! I'm Akasi, your personal wellness assistant. I help you track your health by building a wellness journal. I've activated my body scanner to check how you're doing. Just start by telling me how you feel today. You can also add notes, symptoms, photos, or any medical documents along the way. Let's begin!",
+                id="akasi-speech-content",  # Dynamic content container
+                cls="akasi-speech-text"
+            ),
             id="akasi-speech-bubble",
             cls="akasi-speech-bubble show"
         ),
@@ -1324,46 +1475,49 @@ def wellness_journal_page(auth):
         cls="akasi-component"  # New wrapper class for the combined component
     )
 
-    # Chat input area (positioned at bottom of screen) - maintains HTMX functionality
-    chat_input_area = Form(
-        # Staged attachments container (initially hidden)
-        Div(id="stagedAttachmentsContainer", cls="hidden p-2 bg-white/20 border-t border-white/30 rounded-t"),
+    # Chat input area (positioned at bottom of screen) - RESTRUCTURED FOR VERTICAL LAYOUT
+    chat_input_area = Div(
+        # Staged attachments container (initially hidden) - now outside the form
+        Div(id="stagedAttachmentsContainer", cls="hidden"),
         
-        Div(
-            Textarea(
-                id="chatInput",
-                name="chatInput",
-                placeholder="Describe your symptoms here...",
-                cls="chat-input",  # Using personal-info styles
-            ),
-            Input(type="file", name="files", multiple=True, accept="image/*,.pdf,.doc,.docx,.txt,.md", cls="hidden", id="fileInput"),
+        Form(
             Div(
-                Button(
-                    Span("attach_file", cls="material-icons"),
-                    type="button",
-                    id="attachButton",
-                    cls="attachment-button",
-                    title="Attach files",
-                    onclick="document.getElementById('fileInput').click()"
+                Textarea(
+                    id="chatInput",
+                    name="chatInput",
+                    placeholder="Describe your symptoms here...",
+                    cls="chat-input",  # Using personal-info styles
                 ),
-                Button(
-                    Span("➤", cls="send-icon"),
-                    type="submit",
-                    id="sendButton",
-                    cls="send-button",
-                    title="Send message"
+                Input(type="file", name="files", multiple=True, accept="image/*,.pdf,.doc,.docx,.txt,.md", cls="hidden", id="fileInput"),
+                Div(
+                    Button(
+                        Span("attach_file", cls="material-icons"),
+                        type="button",
+                        id="attachButton",
+                        cls="attachment-button",
+                        title="Attach files",
+                        onclick="document.getElementById('fileInput').click()"
+                    ),
+                    Button(
+                        Span("➤", cls="send-icon"),
+                        type="submit",
+                        id="sendButton",
+                        cls="send-button",
+                        title="Send message"
+                    ),
+                    cls="flex items-center gap-3"
                 ),
-                cls="flex items-center gap-3"
+                cls="chat-input-container"
             ),
-            cls="chat-input-container"
+            id="chatForm",
+            cls="chat-form-wrapper",
+            enctype="multipart/form-data",
+            hx_post="/send_chat_speech_bubble",  # NEW ENDPOINT for speech bubble
+            hx_target="#akasi-speech-content",   # Target the speech bubble content
+            hx_swap="innerHTML",                # Replace the speech bubble content
+            hx_encoding="multipart/form-data"
         ),
-        id="chatForm",
-        cls="chat-input-area",  # Using personal-info layout
-        enctype="multipart/form-data",
-        hx_post="/send_chat_message",
-        hx_target="#messagesArea",
-        hx_swap="beforeend",
-        hx_encoding="multipart/form-data"
+        cls="chat-input-area"  # Main container with vertical layout
     )
 
     # Chat history modal - similar to personal-info but adapted for wellness journal
@@ -3527,16 +3681,12 @@ dashboard_styles = Style("""
     main.dashboard-main-content {
         padding-bottom: 80px; 
     }
-    /* Style for emoji icons in buttons to ensure consistent size and alignment */
-    .emoji-icon {
-        font-size: 1.5em; /* Adjust size as needed */
-        line-height: 1;
-    }
-    .btm-nav-button .emoji-icon { /* Specific for bottom nav if needed */
+    /* Style for material icons in buttons to ensure consistent size and alignment */
+    .btm-nav-button .material-icons { /* Specific for bottom nav if needed */
         font-size: 1.75em; /* Larger for bottom nav */
-        margin-bottom: 0.125rem; /* Add a bit of space below emoji */
+        margin-bottom: 0.125rem; /* Add a bit of space below icon */
     }
-    .top-nav-btn .emoji-icon {
+    .top-nav-btn .material-icons {
         font-size: 1.3em;
     }
 """)
@@ -3625,7 +3775,7 @@ def home_page(auth):
                 cls='flex items-center'
             ),
             Div(
-                Button(Span("🔔", cls="emoji-icon"), aria_label="Notifications", cls='p-2 rounded-full hover:bg-white/20 text-white btn btn-ghost btn-circle top-nav-btn'),
+                Button(Span("notifications", cls="material-icons"), aria_label="Notifications", cls='p-2 rounded-full hover:bg-white/20 text-white btn btn-ghost btn-circle top-nav-btn'),
                 Div(user_initial, cls='w-9 h-9 bg-white/30 rounded-full flex items-center justify-center text-white font-semibold', aria_label="User Menu"),
                 cls='flex items-center space-x-3'
             ),
@@ -3646,15 +3796,15 @@ def home_page(auth):
     )
 
     tabs = [
-        {'name': 'home', 'label': 'Home', 'emoji': '🏠', 'route': '/home/home-view'},
-        {'name': 'journal', 'label': 'Journal', 'emoji': '📝', 'route': '/home/journal-view'},
-        {'name': 'insights', 'label': 'Insights', 'emoji': '📊', 'route': '/home/insights-view'},
-        {'name': 'profile', 'label': 'Profile', 'emoji': '👤', 'route': '/home/profile-view'}
+        {'name': 'home', 'label': 'Home', 'icon': 'home', 'route': '/home/home-view'},
+        {'name': 'journal', 'label': 'Journal', 'icon': 'article', 'route': '/home/journal-view'},
+        {'name': 'insights', 'label': 'Insights', 'icon': 'analytics', 'route': '/home/insights-view'},
+        {'name': 'profile', 'label': 'Profile', 'icon': 'person', 'route': '/home/profile-view'}
     ]
     
     bottom_nav_buttons = [
         Button(
-            Span(tab['emoji'], cls="emoji-icon"), 
+            Span(tab['icon'], cls="material-icons"), 
             Span(tab['label'], cls='text-xs mt-1'),
             data_tab=tab['name'], 
             hx_get=tab['route'],
@@ -3681,6 +3831,7 @@ def home_page(auth):
 
     return (
         Title("Akasi.ai Dashboard"),
+        Link(href="https://fonts.googleapis.com/icon?family=Material+Icons", rel="stylesheet"),
         dashboard_styles, 
         page_shell,
         Script(dashboard_script_content) 
@@ -3700,7 +3851,7 @@ def render_home_tab_content(user_name, auth_session_data):
         H2("Today's Health", cls="text-xl font-semibold mb-4 text-gray-700"),
         Div(
             Div(
-                Div(Span("✅", cls="emoji-icon mr-1.5 text-emerald-500"), Span("Medications", cls="text-sm font-medium"), cls="flex items-center justify-center mb-1 text-gray-600"),
+                Div(Span("medication_liquid", cls="material-icons mr-1.5 text-emerald-500"), Span("Medications", cls="text-sm font-medium"), cls="flex items-center justify-center mb-1 text-gray-600"),
                 Div(
                     Button("-", cls="metric-btn p-1 text-gray-400 hover:text-emerald-600 text-xl", data_metric="medicationsTaken", data_action="decrement", data_total="3"),
                     P("1/3", id="medicationsTaken", cls="text-2xl font-semibold text-emerald-600 mx-3"),
@@ -3709,11 +3860,11 @@ def render_home_tab_content(user_name, auth_session_data):
                 )
             ),
             Div(
-                Div(Span("😴", cls="emoji-icon mr-1.5 text-indigo-500"), Span("Sleep", cls="text-sm font-medium"), cls="flex items-center justify-center mb-1 text-gray-600"),
+                Div(Span("bedtime", cls="material-icons mr-1.5 text-indigo-500"), Span("Sleep", cls="text-sm font-medium"), cls="flex items-center justify-center mb-1 text-gray-600"),
                 P("6.5 hrs", id="sleepHours", cls="text-2xl font-semibold text-indigo-600")
             ),
             Div(
-                Div(Span("💧", cls="emoji-icon mr-1.5 text-sky-500"), Span("Water", cls="text-sm font-medium"), cls="flex items-center justify-center mb-1 text-gray-600"),
+                Div(Span("water_drop", cls="material-icons mr-1.5 text-sky-500"), Span("Water", cls="text-sm font-medium"), cls="flex items-center justify-center mb-1 text-gray-600"),
                 Div(
                     Button("-", cls="metric-btn p-1 text-gray-400 hover:text-sky-600 text-xl", data_metric="waterIntake", data_action="decrement", data_goal="8"),
                     P("4/8", id="waterIntake", cls="text-2xl font-semibold text-sky-600 mx-3"),
@@ -3732,13 +3883,13 @@ def render_home_tab_content(user_name, auth_session_data):
             Div(
                 Div("12:30 PM", cls="mr-4 text-red-600 text-sm font-medium"),
                 Div("Take Metformin with lunch", cls="flex-1 text-gray-700 text-sm"),
-                Button(Span("✅", cls="emoji-icon"), cls="complete-reminder-btn p-2 text-gray-400 hover:text-emerald-700 rounded-full btn btn-ghost btn-sm btn-circle"),
+                Button(Span("check_circle", cls="material-icons"), cls="complete-reminder-btn p-2 text-gray-400 hover:text-emerald-700 rounded-full btn btn-ghost btn-sm btn-circle"),
                 cls="reminder-item flex items-center p-3.5 border-l-4 border-red-500 bg-red-50 rounded-r-lg shadow-sm"
             ),
              Div(
                 Div("3:00 PM", cls="mr-4 text-emerald-600 text-sm font-medium"),
                 Div("Log afternoon symptoms", cls="flex-1 text-gray-700 text-sm"),
-                Button(Span("✅", cls="emoji-icon"), cls="complete-reminder-btn p-2 text-gray-400 hover:text-emerald-700 rounded-full btn btn-ghost btn-sm btn-circle"),
+                Button(Span("check_circle", cls="material-icons"), cls="complete-reminder-btn p-2 text-gray-400 hover:text-emerald-700 rounded-full btn btn-ghost btn-sm btn-circle"),
                 cls="reminder-item flex items-center p-3.5 border-l-4 border-emerald-500 bg-emerald-50 rounded-r-lg shadow-sm mt-3"
             ),
             # cls="space-y-3" # space-y-3 might not work as expected with direct Div children, using mt-3 on second item.
@@ -3750,12 +3901,12 @@ def render_home_tab_content(user_name, auth_session_data):
         Div(H2("Akasi Insights", cls="text-xl font-semibold text-gray-700"), Span("New", cls="bg-gradient-to-r from-green-500 to-emerald-500 text-white text-xs px-2.5 py-1 rounded-full font-medium"), cls="flex justify-between items-center mb-4"),
         Div(
             Div(
-                Div(Div(Span("ℹ️", cls="emoji-icon"),cls="w-8 h-8 bg-gradient-to-r from-green-500 to-emerald-500 rounded-full flex items-center justify-center"), cls="flex-shrink-0 mr-3 mt-0.5"),
+                Div(Div(Span("info", cls="material-icons text-white"),cls="w-8 h-8 bg-gradient-to-r from-green-500 to-emerald-500 rounded-full flex items-center justify-center"), cls="flex-shrink-0 mr-3 mt-0.5"),
                 P("Your sleep pattern has improved by 12% this week.", cls="text-gray-700 text-sm"),
                 cls="flex items-start p-3.5 bg-gray-50 rounded-lg"
             ),
             Div(
-                Div(Div(Span("ℹ️", cls="emoji-icon"),cls="w-8 h-8 bg-gradient-to-r from-green-500 to-emerald-500 rounded-full flex items-center justify-center"), cls="flex-shrink-0 mr-3 mt-0.5"),
+                Div(Div(Span("info", cls="material-icons text-white"),cls="w-8 h-8 bg-gradient-to-r from-green-500 to-emerald-500 rounded-full flex items-center justify-center"), cls="flex-shrink-0 mr-3 mt-0.5"),
                 P("Consider reducing caffeine - may be affecting your symptoms.", cls="text-gray-700 text-sm"),
                 cls="flex items-start p-3.5 bg-gray-50 rounded-lg mt-3"
             ),
@@ -3765,8 +3916,8 @@ def render_home_tab_content(user_name, auth_session_data):
     )
 
     quick_actions = Div(
-        Button(Span("➕", cls="emoji-icon"), Span("Log Symptoms", cls="font-medium text-sm mt-2"), data_tab="journal", cls="tab-button flex flex-col items-center justify-center p-4 bg-white rounded-xl shadow-lg hover:bg-gray-50 transition-colors text-emerald-600 hover:text-emerald-700"),
-        Button(Span("📅", cls="emoji-icon"), Span("My Journal", cls="font-medium text-sm mt-2"), data_tab="journal", cls="tab-button flex flex-col items-center justify-center p-4 bg-white rounded-xl shadow-lg hover:bg-gray-50 transition-colors text-emerald-600 hover:text-emerald-700"),
+        Button(Span("add_circle", cls="material-icons"), Span("Log Symptoms", cls="font-medium text-sm mt-2"), data_tab="journal", cls="tab-button flex flex-col items-center justify-center p-4 bg-white rounded-xl shadow-lg hover:bg-gray-50 transition-colors text-emerald-600 hover:text-emerald-700"),
+        Button(Span("event_note", cls="material-icons"), Span("My Journal", cls="font-medium text-sm mt-2"), data_tab="journal", cls="tab-button flex flex-col items-center justify-center p-4 bg-white rounded-xl shadow-lg hover:bg-gray-50 transition-colors text-emerald-600 hover:text-emerald-700"),
         cls="grid grid-cols-2 gap-4"
     )
 
@@ -3776,9 +3927,9 @@ def render_home_tab_content(user_name, auth_session_data):
             H1(f"Hello, {user_name}", cls="text-3xl font-semibold mb-1 text-gray-800"),
             P("How are you feeling today?", cls="text-gray-600"),
             Div(
-                Button("😊 Good", data_mood="Good", cls="mood-btn px-4 py-2 rounded-lg bg-green-100 hover:bg-green-200 text-green-700 transition-colors"),
-                Button("😐 Okay", data_mood="Okay", cls="mood-btn px-4 py-2 rounded-lg bg-yellow-100 hover:bg-yellow-200 text-yellow-700 transition-colors"),
-                Button("😔 Not great", data_mood="Not Great", cls="mood-btn px-4 py-2 rounded-lg bg-red-100 hover:bg-red-200 text-red-700 transition-colors"),
+                Button(Span("sentiment_very_satisfied", cls="material-icons mr-1"), "Good", data_mood="Good", cls="mood-btn px-4 py-2 rounded-lg bg-green-100 hover:bg-green-200 text-green-700 transition-colors flex items-center"),
+                Button(Span("sentiment_neutral", cls="material-icons mr-1"), "Okay", data_mood="Okay", cls="mood-btn px-4 py-2 rounded-lg bg-yellow-100 hover:bg-yellow-200 text-yellow-700 transition-colors flex items-center"),
+                Button(Span("sentiment_dissatisfied", cls="material-icons mr-1"), "Not great", data_mood="Not Great", cls="mood-btn px-4 py-2 rounded-lg bg-red-100 hover:bg-red-200 text-red-700 transition-colors flex items-center"),
                 cls="flex space-x-2 mt-3"
             ),
             cls="mb-6"
@@ -3838,7 +3989,7 @@ def journal_tab_view(auth):
     return Div(
         Div(
             Div(H1("Health Journal", cls="text-2xl font-semibold text-gray-800"), P("Track your daily health journey.", cls="text-gray-600")),
-            Button(Span("🩺", cls="emoji-icon"), " AI Symptom Log", id="goBackToScannerBtn", cls="px-4 py-2 text-sm bg-emerald-500 hover:bg-emerald-600 text-white rounded-md transition-colors flex items-center gap-2 shadow-sm"),
+            Button(Span("medical_services", cls="material-icons"), " AI Symptom Log", id="goBackToScannerBtn", cls="px-4 py-2 text-sm bg-emerald-500 hover:bg-emerald-600 text-white rounded-md transition-colors flex items-center gap-2 shadow-sm"),
             cls="mb-6 flex justify-between items-center"
         ),
         add_entry_card,
@@ -3883,7 +4034,7 @@ def profile_tab_view(auth):
             Div(Span("Joined:", cls="font-medium text-gray-600"), Span("May 17, 2024", cls="text-gray-800"), cls="flex justify-between py-2"), # Placeholder date
             cls="space-y-1 text-sm"
         ),
-        Button(Span("✏️", cls="emoji-icon mr-2"), "Edit Profile", cls="btn btn-outline btn-primary btn-sm mt-4 w-full md:w-auto"),
+        Button(Span("edit", cls="material-icons mr-2"), "Edit Profile", cls="btn btn-outline btn-primary btn-sm mt-4 w-full md:w-auto"),
         cls="bg-white p-6 rounded-xl shadow-lg mb-6"
     )
 
@@ -3914,7 +4065,7 @@ def profile_tab_view(auth):
     # --- Security Section ---
     security_section = Div(
         H3("Security", cls="text-lg font-semibold text-gray-700 mb-3"),
-        Button(Span("🔑", cls="emoji-icon mr-2"),"Change Password", cls="btn btn-outline btn-secondary w-full md:w-auto btn-sm"),
+        Button(Span("lock", cls="material-icons mr-2"),"Change Password", cls="btn btn-outline btn-secondary w-full md:w-auto btn-sm"),
         cls="bg-white p-6 rounded-xl shadow-lg mb-6"
     )
 
@@ -3922,7 +4073,7 @@ def profile_tab_view(auth):
     logout_section = Div(
         # Using a Form for logout to potentially handle POST request for CSRF protection etc.
         Form(
-            Button(Span("🚪", cls="emoji-icon mr-2"), "Logout", type="submit", cls="btn btn-error text-white w-full"),
+            Button(Span("logout", cls="material-icons mr-2"), "Logout", type="submit", cls="btn btn-error text-white w-full"),
             method="post", # Or GET, depending on your logout implementation
             action="/logout" # Ensure you have a /logout route
         ),

@@ -113,6 +113,28 @@ body {
   vertical-align: middle; 
 }
 
+/* General Material Icons consistency */
+.material-icons {
+    font-family: 'Material Icons', 'Material Icons Outlined', 'Material Symbols Outlined', sans-serif;
+    font-weight: normal;
+    font-style: normal;
+    line-height: 1;
+    letter-spacing: normal;
+    text-transform: none;
+    white-space: nowrap;
+    word-wrap: normal;
+    direction: ltr;
+    -webkit-font-feature-settings: 'liga';
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+    -moz-osx-font-smoothing: grayscale;
+}
+
+/* Ensure remove buttons maintain circular shape */
+.remove-btn {
+    box-sizing: border-box;
+}
+
 
 .btn-xs .material-icons.emoji-icon {
   font-size: 1em;
@@ -205,30 +227,176 @@ dialog.modal .modal-box {
   line-height: 0.875rem;
 }
 
-.staged-attachment-item {
-  transition: background-color 0.2s ease-in-out;
-}
-
-.staged-attachment-item:hover {
-  background-color: rgba(163, 163, 163, 0.2);
-}
-
-.staged-attachment-item .remove-btn {
-  opacity: 0.6;
-  transition: opacity 0.2s ease-in-out;
-}
-
-.staged-attachment-item:hover .remove-btn {
-  opacity: 1;
-}
+/* ========================================
+   ATTACHMENT STAGING GLASS-LIKE STYLING
+   ======================================== */
 
 #stagedAttachmentsContainer {
-  border-top: 1px solid #e5e7eb;
-  background-color: #f8fafc;
+    background: rgba(255, 255, 255, 0.1);
+    backdrop-filter: blur(20px) saturate(180%);
+    -webkit-backdrop-filter: blur(20px) saturate(180%);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    border-radius: 16px 16px 0 0; /* Rounded top corners */
+    padding: 16px;
+    margin-bottom: 8px;
+    box-shadow: 
+        0 -4px 16px rgba(0, 0, 0, 0.1),
+        0 0 0 1px rgba(255, 255, 255, 0.05) inset;
+    position: relative;
+    z-index: 10;
+    width: 100%;
+    max-height: 200px;
+    overflow-y: auto;
 }
 
 #stagedAttachmentsContainer:not(.hidden) {
-  animation: slideUp 0.2s ease-out;
+    animation: slideUpGlass 0.3s ease-out;
+}
+
+@keyframes slideUpGlass {
+    from {
+        opacity: 0;
+        transform: translateY(10px);
+        backdrop-filter: blur(0px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+        backdrop-filter: blur(20px) saturate(180%);
+    }
+}
+
+/* Staged attachment items styling */
+.staged-attachment-item {
+    background: rgba(255, 255, 255, 0.15);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    border-radius: 12px;
+    padding: 12px;
+    margin-bottom: 8px;
+    transition: all 0.2s ease-in-out;
+    backdrop-filter: blur(10px);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.staged-attachment-item:hover {
+    background: rgba(255, 255, 255, 0.25);
+    border-color: rgba(255, 255, 255, 0.3);
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+.staged-attachment-item .remove-btn {
+    background: rgba(255, 255, 255, 0.1);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    border-radius: 50%;
+    width: 30px;
+    height: 30px;
+    padding: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    opacity: 0.7;
+    transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+    cursor: pointer;
+    flex-shrink: 0;
+    position: relative;
+    overflow: hidden;
+    transform-origin: center center;
+}
+
+.staged-attachment-item .remove-btn .material-icons {
+    font-family: 'Material Icons', 'Material Icons Outlined', 'Material Symbols Outlined', sans-serif;
+    font-weight: normal;
+    font-style: normal;
+    font-size: 18px;
+    line-height: 1;
+    letter-spacing: normal;
+    text-transform: none;
+    display: inline-block;
+    white-space: nowrap;
+    word-wrap: normal;
+    direction: ltr;
+    color: rgba(255, 255, 255, 0.9);
+    transition: all 0.2s ease-in-out;
+    vertical-align: middle;
+    -webkit-font-feature-settings: 'liga';
+    -webkit-font-smoothing: antialiased;
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+}
+
+.staged-attachment-item:hover .remove-btn,
+.staged-attachment-item .remove-btn:focus {
+    opacity: 1;
+    background: rgba(239, 68, 68, 0.8);
+    border-color: rgba(239, 68, 68, 1);
+    transform: scale(1.1);
+    box-shadow: 0 2px 8px rgba(239, 68, 68, 0.4);
+    outline: none;
+}
+
+.staged-attachment-item:hover .remove-btn .material-icons,
+.staged-attachment-item .remove-btn:focus .material-icons {
+    color: white;
+    transform: translate(-50%, -50%) scale(1);
+}
+
+.staged-attachment-item .remove-btn:active {
+    transform: scale(0.95);
+    transition-duration: 0.1s;
+}
+
+/* Attachment file info styling */
+.staged-attachment-item .material-icons {
+    color: rgba(255, 255, 255, 0.9);
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 8px;
+    padding: 6px;
+    margin-right: 12px;
+    font-size: 20px;
+    flex-shrink: 0;
+}
+
+.staged-attachment-item .attachment-name {
+    color: rgba(255, 255, 255, 0.95);
+    font-weight: 500;
+    font-size: 13px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 200px;
+    display: block;
+}
+
+.staged-attachment-item .attachment-size {
+    color: rgba(255, 255, 255, 0.7);
+    font-weight: 400;
+    font-size: 11px;
+    display: block;
+    margin-top: 2px;
+}
+
+/* File info container */
+.staged-attachment-item .attachment-file-info {
+    display: flex;
+    align-items: center;
+    overflow: hidden;
+    margin-right: 8px;
+    flex: 1;
+    min-width: 0;
+}
+
+.staged-attachment-item .attachment-info {
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    flex: 1;
+    min-width: 0;
 }
 
 /* Add to /css/wellness_journal.css */
@@ -393,9 +561,270 @@ dialog.modal .modal-box {
     }
 }
 
+/* Slow-down versions of medical pulse animation */
+@keyframes medicalPulseSlow {
+    0%, 100% { 
+        transform: scale(1);
+        filter: brightness(1) drop-shadow(0 0 5px rgba(255, 255, 255, 0.3));
+    }
+    50% { 
+        transform: scale(1.05);
+        filter: brightness(1.15) drop-shadow(0 0 10px rgba(255, 255, 255, 0.4));
+    }
+}
+
+@keyframes medicalPulseVerySlow {
+    0%, 100% { 
+        transform: scale(1);
+        filter: brightness(1) drop-shadow(0 0 5px rgba(255, 255, 255, 0.3));
+    }
+    50% { 
+        transform: scale(1.02);
+        filter: brightness(1.08) drop-shadow(0 0 8px rgba(255, 255, 255, 0.35));
+    }
+}
+
+@keyframes medicalPulseStopping {
+    0% { 
+        transform: scale(1.01);
+        filter: brightness(1.04) drop-shadow(0 0 6px rgba(255, 255, 255, 0.32));
+    }
+    100% { 
+        transform: scale(1);
+        filter: brightness(1) drop-shadow(0 0 5px rgba(255, 255, 255, 0.3));
+    }
+}
+
+/* ========================================
+   ANIMATION SLOWDOWN CONTROL CLASSES
+   ======================================== */
+
+/* Akasi Component Floating Animation Control */
+.akasi-component.slowing-down {
+    animation: floatUpDownSlow 6s ease-in-out infinite;
+}
+
+.akasi-component.very-slow {
+    animation: floatUpDownVerySlow 10s ease-in-out infinite;
+}
+
+.akasi-component.stopping {
+    animation: floatUpDownStopping 2s ease-out forwards;
+}
+
+.akasi-component.stopped {
+    animation: none;
+    transform: translateY(0px) scale(1);
+}
+
+/* Medical Icon Pulse Animation Control */
+.akasi-floating-ball .medical-icon.slowing-down {
+    animation: medicalPulseSlow 4s ease-in-out infinite;
+}
+
+.akasi-floating-ball .medical-icon.very-slow {
+    animation: medicalPulseVerySlow 6s ease-in-out infinite;
+}
+
+.akasi-floating-ball .medical-icon.stopping {
+    animation: medicalPulseStopping 1.5s ease-out forwards;
+}
+
+.akasi-floating-ball .medical-icon.stopped {
+    animation: none;
+    transform: scale(1);
+    filter: brightness(1) drop-shadow(0 0 5px rgba(255, 255, 255, 0.3));
+}
+
 /* Speech bubble positioning override for wellness journal */
 .wellness-journal-bg .akasi-speech-bubble {
-    top: -160px; /* Moved higher from default -120px */
+    bottom: 140px; /* Fixed distance from floating ball - expands upward */
+    top: auto; /* Override any top positioning */
+}
+
+/* Custom glassy scrollbar for speech bubble overflow */
+.akasi-speech-bubble::-webkit-scrollbar {
+    width: 8px;
+}
+
+.akasi-speech-bubble::-webkit-scrollbar-track {
+    background: rgba(255, 255, 255, 0.05);
+    border-radius: 6px;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    backdrop-filter: blur(5px);
+}
+
+.akasi-speech-bubble::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.2);
+    border-radius: 6px;
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    backdrop-filter: blur(10px);
+    box-shadow: 
+        0 2px 4px rgba(0, 0, 0, 0.1),
+        inset 0 1px 0 rgba(255, 255, 255, 0.2);
+    transition: all 0.2s ease;
+}
+
+.akasi-speech-bubble::-webkit-scrollbar-thumb:hover {
+    background: rgba(255, 255, 255, 0.3);
+    border-color: rgba(255, 255, 255, 0.25);
+    box-shadow: 
+        0 4px 8px rgba(0, 0, 0, 0.15),
+        inset 0 1px 0 rgba(255, 255, 255, 0.3);
+    transform: scale(1.05);
+}
+
+.akasi-speech-bubble::-webkit-scrollbar-thumb:active {
+    background: rgba(255, 255, 255, 0.25);
+    transform: scale(0.98);
+}
+
+
+
+/* ========================================
+   DYNAMIC SPEECH BUBBLE STYLING
+   ======================================== */
+
+/* Speech bubble content states - CONSOLIDATED RULE */
+.akasi-speech-text {
+    display: block;
+    line-height: 1.4;
+    color: #1f2937; /* Dark gray/black text for visibility */
+    font-size: 15px;
+    font-weight: 500; /* Increased weight for better visibility */
+    font-style: normal; /* Ensure no italic/slanted text */
+    word-wrap: break-word;
+    overflow-wrap: break-word;
+    hyphens: auto;
+    text-align: left;
+    width: 100%;
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; /* Modern font stack */
+    white-space: pre-wrap; /* Preserve newlines and whitespace while allowing text wrapping */
+}
+
+.akasi-speech-text.error-message {
+    color: #fecaca; /* Light red for errors */
+    font-style: italic;
+}
+
+.akasi-speech-text.ai-response {
+    animation: fadeIn 0.5s ease-out;
+}
+
+/* Typing indicator styling */
+.typing-indicator {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 40px;
+}
+
+.typing-indicator-content {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.typing-text {
+    color: #1f2937; /* Dark gray for visibility */
+    font-size: 14px;
+    font-style: normal; /* Changed from italic to normal */
+    font-weight: 600; /* Match main speech bubble weight */
+}
+
+.typing-dots {
+    display: flex;
+    gap: 4px;
+    align-items: center;
+    margin-left: 6px;
+}
+
+.typing-dot {
+    width: 6px;
+    height: 6px;
+    background-color: #1f2937; /* Dark gray for visibility */
+    border-radius: 50%;
+    opacity: 0.4;
+    animation: typingPulse 1.4s infinite ease-in-out;
+    display: inline-block;
+}
+
+.typing-dot.dot-1 {
+    animation-delay: 0s;
+}
+
+.typing-dot.dot-2 {
+    animation-delay: 0.2s;
+}
+
+.typing-dot.dot-3 {
+    animation-delay: 0.4s;
+}
+
+@keyframes typingPulse {
+    0%, 60%, 100% {
+        opacity: 0.4;
+        transform: scale(1);
+    }
+    30% {
+        opacity: 1;
+        transform: scale(1.2);
+    }
+}
+
+/* Smooth transition between speech bubble states */
+.akasi-speech-bubble {
+    transition: all 0.3s ease-out;
+    /* Firefox glassy scrollbar styling */
+    scrollbar-width: thin;
+    scrollbar-color: rgba(255, 255, 255, 0.2) rgba(255, 255, 255, 0.05);
+}
+
+#akasi-speech-content {
+    transition: all 0.3s ease-out;
+    min-height: 40px;
+    display: flex;
+    align-items: center;
+    width: 100%;
+    padding: 2px 0;
+}
+
+/* DUPLICATE RULE REMOVED - All properties consolidated into main .akasi-speech-text rule above */
+
+/* Enhanced error message styling */
+.akasi-speech-text.error-message {
+    color: #dc2626; /* Dark red for visibility on white background */
+    font-style: normal; /* Changed from italic to normal */
+    font-weight: 600; /* Slightly bolder for error emphasis */
+    border-left: 2px solid #dc2626;
+    padding-left: 8px;
+    margin-left: 4px;
+}
+
+/* AI response with subtle animation */
+.akasi-speech-text.ai-response {
+    animation: fadeIn 0.5s ease-out;
+    /* Color and font properties inherited from main .akasi-speech-text rule */
+}
+
+/* Responsive text sizing for smaller speech bubbles */
+@media (max-width: 640px) {
+    .akasi-speech-text {
+        font-size: 13px;
+        line-height: 1.3;
+        /* font-weight inherited from main rule */
+    }
+    
+    .typing-text {
+        font-size: 13px;
+        font-weight: 600; /* Match main speech bubble weight */
+    }
+    
+    /* Speech bubble mobile positioning override */
+    .wellness-journal-bg .akasi-speech-bubble {
+        bottom: 120px; /* Adjusted for smaller mobile floating ball */
+        max-height: calc(100vh - 250px); /* More restrictive on mobile */
+    }
 }
 
 /* ========================================
@@ -819,18 +1248,25 @@ dialog.modal .modal-box {
    CHAT INPUT CUSTOMIZATIONS (matches personal-info)
    ======================================== */
 
-/* Chat input area - positioned at bottom of screen with proper width */
+/* Chat input area - positioned at bottom of screen with vertical layout */
 .chat-input-area {
     position: fixed;
     bottom: 2rem;
     left: 50%;
     transform: translateX(-50%);
     display: flex;
-    gap: 0.75rem;
-    align-items: center;
+    flex-direction: column;
+    gap: 0;
     width: 90%;
     max-width: 500px;
     z-index: 100;
+}
+
+.chat-form-wrapper {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    width: 100%;
 }
 
 .chat-input-container {
@@ -1062,6 +1498,9 @@ dialog.modal .modal-box {
     .chat-input-area {
         width: 95%;
         bottom: 1.5rem;
+    }
+
+    .chat-form-wrapper {
         gap: 0.5rem;
     }
 
@@ -1079,6 +1518,12 @@ dialog.modal .modal-box {
     .attachment-button {
         width: 40px;
         height: 40px;
+    }
+
+    #stagedAttachmentsContainer {
+        padding: 12px;
+        margin-bottom: 6px;
+        max-height: 150px;
     }
 }
 
@@ -1113,6 +1558,9 @@ dialog.modal .modal-box {
     .chat-input-area {
         width: 98%;
         bottom: 1rem;
+    }
+
+    .chat-form-wrapper {
         gap: 0.375rem;
     }
 
@@ -1130,6 +1578,41 @@ dialog.modal .modal-box {
     .attachment-button {
         width: 38px;
         height: 38px;
+    }
+
+    #stagedAttachmentsContainer {
+        padding: 10px;
+        margin-bottom: 4px;
+        max-height: 120px;
+    }
+
+    .staged-attachment-item {
+        padding: 8px;
+        margin-bottom: 6px;
+    }
+
+    .staged-attachment-item .material-icons {
+        font-size: 18px;
+        padding: 4px;
+        margin-right: 8px;
+    }
+
+    .staged-attachment-item .attachment-name {
+        font-size: 12px;
+        max-width: 150px;
+    }
+
+    .staged-attachment-item .attachment-size {
+        font-size: 10px;
+    }
+
+    .staged-attachment-item .remove-btn {
+        width: 28px;
+        height: 28px;
+    }
+
+    .staged-attachment-item .remove-btn .material-icons {
+        font-size: 16px;
     }
 }
 
@@ -1358,26 +1841,7 @@ dialog.modal .modal-box {
   line-height: 0.875rem;
 }
 
-.staged-attachment-item {
-  transition: background-color 0.2s ease-in-out;
-}
-
-.staged-attachment-item:hover {
-  background-color: rgba(163, 163, 163, 0.2);
-}
-
-.staged-attachment-item .remove-btn {
-  opacity: 0.6;
-  transition: opacity 0.2s ease-in-out;
-}
-
-.staged-attachment-item:hover .remove-btn {
-  opacity: 1;
-}
-
-#stagedAttachmentsContainer:not(.hidden) {
-  animation: slideUp 0.2s ease-out;
-}
+/* Attachment staging styles integrated above in glass-like styling section */
 
 /* Body image glowing effects */
 .body-image-glowing {

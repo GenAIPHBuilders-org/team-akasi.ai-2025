@@ -49,6 +49,101 @@ let closeBodScanner = null;
 let conversationHistory = [];
 
 // ========================================
+// ANIMATION SLOWDOWN MANAGEMENT
+// ========================================
+
+let animationSlowdownActive = false;
+let slowdownTimeouts = [];
+
+function slowDownAkasiAnimations() {
+    if (animationSlowdownActive) return; // Prevent multiple simultaneous slowdowns
+    
+    animationSlowdownActive = true;
+    
+    // Clear any existing timeouts
+    slowdownTimeouts.forEach(timeout => clearTimeout(timeout));
+    slowdownTimeouts = [];
+    
+    const akasiComponent = document.querySelector('.akasi-component');
+    const medicalIcon = document.querySelector('.akasi-floating-ball .medical-icon');
+    const heartIcon = document.querySelector('.akasi-floating-ball .heart-icon');
+    
+    // Phase 1: Start slowing down (immediate)
+    if (akasiComponent) {
+        akasiComponent.classList.add('slowing-down');
+    }
+    
+    if (medicalIcon) {
+        medicalIcon.classList.add('slowing-down');
+    }
+    
+    if (heartIcon) {
+        heartIcon.classList.add('slowing-down');
+    }
+    
+    // Phase 2: Very slow (after 2 seconds)
+    const phase2Timeout = setTimeout(() => {
+        if (akasiComponent) {
+            akasiComponent.classList.remove('slowing-down');
+            akasiComponent.classList.add('very-slow');
+        }
+        
+        if (medicalIcon) {
+            medicalIcon.classList.remove('slowing-down');
+            medicalIcon.classList.add('very-slow');
+        }
+        
+        if (heartIcon) {
+            heartIcon.classList.remove('slowing-down');
+            heartIcon.classList.add('very-slow');
+        }
+    }, 2000);
+    slowdownTimeouts.push(phase2Timeout);
+    
+    // Phase 3: Stopping animation (after 5 seconds total)
+    const phase3Timeout = setTimeout(() => {
+        if (akasiComponent) {
+            akasiComponent.classList.remove('very-slow');
+            akasiComponent.classList.add('stopping');
+        }
+        
+        if (medicalIcon) {
+            medicalIcon.classList.remove('very-slow');
+            medicalIcon.classList.add('stopping');
+        }
+        
+        if (heartIcon) {
+            heartIcon.classList.remove('very-slow');
+            heartIcon.classList.add('stopping');
+        }
+    }, 5000);
+    slowdownTimeouts.push(phase3Timeout);
+    
+    // Phase 4: Completely stopped (after 7.5 seconds total)
+    const phase4Timeout = setTimeout(() => {
+        if (akasiComponent) {
+            akasiComponent.classList.remove('stopping');
+            akasiComponent.classList.add('stopped');
+        }
+        
+        if (medicalIcon) {
+            medicalIcon.classList.remove('stopping');
+            medicalIcon.classList.add('stopped');
+        }
+        
+        if (heartIcon) {
+            heartIcon.classList.remove('stopping');
+            heartIcon.classList.add('stopped');
+        }
+        
+        animationSlowdownActive = false;
+    }, 7500);
+    slowdownTimeouts.push(phase4Timeout);
+}
+
+
+
+// ========================================
 // CHAT HISTORY FUNCTIONALITY (from personal-info)
 // ========================================
 
@@ -243,12 +338,18 @@ function hideBodyScannerModal() {
 // ========================================
 
 function initializeChatMessageMonitoring() {
-    // Monitor for new chat messages via HTMX afterSwap events
+    // Monitor for new chat messages via HTMX afterSwap events (original system)
     document.body.addEventListener('htmx:afterSwap', function(event) {
         const messagesArea = document.getElementById('messagesArea');
         if (messagesArea && (event.target === messagesArea || (messagesArea.contains && messagesArea.contains(event.target)))) {
             // Extract the latest messages for chat history
             extractAndSaveNewMessages();
+        }
+        
+        // NEW: Monitor speech bubble content updates for chat history
+        const speechContent = document.getElementById('akasi-speech-content');
+        if (speechContent && event.target === speechContent) {
+            extractSpeechBubbleMessage(event.target);
         }
     });
 
@@ -259,6 +360,7 @@ function initializeChatMessageMonitoring() {
             const userMessage = formData.get('chatInput');
             if (userMessage && userMessage.trim()) {
                 addMessageToHistory('user', userMessage.trim());
+                slowDownAkasiAnimations();
             }
         });
 
@@ -312,6 +414,98 @@ function extractLatestAIMessage() {
 
 function isMessageAlreadyInHistory(messageText) {
     return conversationHistory.some(entry => entry.message === messageText);
+}
+
+// ========================================
+// SPEECH BUBBLE MESSAGE EXTRACTION
+// ========================================
+
+function extractSpeechBubbleMessage(speechContentElement) {
+    if (!speechContentElement) return;
+    
+    // Skip typing indicators and error messages
+    if (speechContentElement.classList.contains('typing-indicator') || 
+        speechContentElement.querySelector('.typing-indicator')) {
+        console.log("Skipping typing indicator for chat history");
+        return;
+    }
+    
+    // Extract AI response from speech bubble
+    const messageText = speechContentElement.textContent?.trim();
+    if (messageText && 
+        !messageText.includes('Akasi is thinking') && 
+        !messageText.includes('I didn\'t receive any message') &&
+        !isMessageAlreadyInHistory(messageText)) {
+        
+        console.log("Adding speech bubble AI response to chat history:", messageText.substring(0, 50) + "...");
+        addMessageToHistory('akasi', messageText);
+    }
+}
+
+// ========================================
+// SPEECH BUBBLE FORM ENHANCEMENTS
+// ========================================
+
+function initializeSpeechBubbleForm() {
+    // Use event delegation for Enter key handling - works with dynamic content
+    document.addEventListener('keypress', (e) => {
+        const target = e.target;
+        if (target && target.id === 'chatInput' && e.key === 'Enter' && !e.shiftKey) {
+            e.preventDefault();
+            const chatForm = document.getElementById('chatForm');
+            if (chatForm) {
+                chatForm.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+            }
+        }
+    });
+    
+    // Use event delegation for auto-resize functionality
+    document.addEventListener('input', (e) => {
+        const target = e.target;
+        if (target && target.id === 'chatInput') {
+            autoResizeTextarea(target);
+        }
+    });
+    
+    // Form submission handling with event delegation
+    document.addEventListener('htmx:beforeRequest', function(event) {
+        if (event.target && event.target.id === 'chatForm') {
+            const formData = new FormData(event.target);
+            const userMessage = formData.get('chatInput');
+            if (userMessage && userMessage.trim()) {
+                slowDownAkasiAnimations();
+            }
+        }
+    });
+}
+
+// Initialize send button listeners for animation control
+function initializeAnimationControlListeners() {
+    // Listen for all send button clicks
+    document.addEventListener('click', function(event) {
+        // Check if clicked element is a send button
+        if (event.target.closest('.send-button') || 
+            event.target.closest('#sendButton') ||
+            event.target.closest('button[type="submit"]')) {
+            
+            const form = event.target.closest('form');
+            if (form) {
+                const formData = new FormData(form);
+                const chatInput = formData.get('chatInput') || formData.get('chatInput');
+                
+                if (chatInput && chatInput.trim()) {
+                    slowDownAkasiAnimations();
+                }
+            }
+        }
+    });
+}
+
+// Auto-resize function for speech bubble textarea
+function autoResizeTextarea(textarea) {
+    if (!textarea) return;
+    textarea.style.height = 'auto';
+    textarea.style.height = `${Math.max(textarea.scrollHeight, 44)}px`;
 }
 
 function initializeChatAttachmentElements() {
@@ -414,14 +608,14 @@ function renderStagedAttachments() {
 
     stagedFilesData.forEach(stagedFile => {
         const attachmentEl = document.createElement('div');
-        attachmentEl.className = 'staged-attachment-item flex items-center justify-between p-1.5 bg-white/10 rounded text-xs mb-1 group';
+        attachmentEl.className = 'staged-attachment-item';
         attachmentEl.dataset.fileId = stagedFile.id;
 
         const fileInfo = document.createElement('div');
-        fileInfo.className = 'flex items-center overflow-hidden mr-2 flex-grow';
+        fileInfo.className = 'attachment-file-info';
 
         const icon = document.createElement('span');
-        icon.className = 'material-icons text-lg mr-1.5 text-white/80 flex-shrink-0';
+        icon.className = 'material-icons';
         
         if (stagedFile.type === 'image') {
             icon.textContent = 'image';
@@ -434,15 +628,15 @@ function renderStagedAttachments() {
         }
 
         const nameAndSizeDiv = document.createElement('div');
-        nameAndSizeDiv.className = 'flex flex-col overflow-hidden';
+        nameAndSizeDiv.className = 'attachment-info';
 
         const name = document.createElement('span');
-        name.className = 'truncate text-white/90 text-xs';
+        name.className = 'attachment-name';
         name.textContent = stagedFile.file.name;
         name.title = stagedFile.file.name;
 
         const size = document.createElement('span');
-        size.className = 'text-white/70 text-xs';
+        size.className = 'attachment-size';
         size.textContent = `${(stagedFile.file.size / 1024).toFixed(1)} KB`;
 
         nameAndSizeDiv.appendChild(name);
@@ -453,8 +647,8 @@ function renderStagedAttachments() {
 
         const removeBtn = document.createElement('button');
         removeBtn.type = 'button';
-        removeBtn.className = 'text-white/50 hover:text-red-400 transition-colors flex-shrink-0 p-1';
-        removeBtn.innerHTML = '<span class="material-icons text-base">close</span>';
+        removeBtn.className = 'remove-btn';
+        removeBtn.innerHTML = '<span class="material-icons">close</span>';
         removeBtn.title = 'Remove attachment';
         removeBtn.onclick = (e) => {
             e.stopPropagation();
@@ -796,6 +990,16 @@ function initializeJournalModalElements() {
         closeManualEntryModalButtonJsEl = manualEntryModalJsEl.querySelector('.modal-box form[method="dialog"] button.btn-ghost');
     }
 
+    // Initialize finish journal button to close modal first
+    const finishJournalButton = document.getElementById('finishJournalButton');
+    if (finishJournalButton) {
+        finishJournalButton.addEventListener('click', function(event) {
+            // Close the body scanner modal first
+            hideBodyScannerModal();
+            // The HTMX request will proceed after the click event
+        });
+    }
+
     if (addManualEntryButtonJsEl && manualEntryModalJsEl) {
         addManualEntryButtonJsEl.addEventListener('click', () => {
             if (manualEntryFormJsEl) {
@@ -886,6 +1090,8 @@ document.addEventListener('DOMContentLoaded', () => {
     initializeJournalModalElements();
     initializeChatHistoryElements();
     initializeChatMessageMonitoring();
+    initializeSpeechBubbleForm(); // NEW: Initialize speech bubble form
+    initializeAnimationControlListeners(); // NEW: Initialize animation control
     initializeChatHistory(); // Initialize with welcome message
     
     // Delay the start of the body scan animation by 4 seconds
@@ -896,4 +1102,4 @@ document.addEventListener('DOMContentLoaded', () => {
     updateScanAnimationVisuals();
 });
 
-console.log("wellness_enhancements.js loaded (v3.0 - personal-info integration).");
+console.log("wellness_enhancements.js loaded (v3.2 - clean animation slowdown).");

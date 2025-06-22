@@ -57,6 +57,34 @@
     }
 }
 
+/* Slow-down versions of floating animation */
+@keyframes floatUpDownSlow {
+    0%, 100% { 
+        transform: translateY(0px) scale(1);
+    }
+    50% { 
+        transform: translateY(-12px) scale(1.03);
+    }
+}
+
+@keyframes floatUpDownVerySlow {
+    0%, 100% { 
+        transform: translateY(0px) scale(1);
+    }
+    50% { 
+        transform: translateY(-6px) scale(1.01);
+    }
+}
+
+@keyframes floatUpDownStopping {
+    0% { 
+        transform: translateY(-3px) scale(1.005);
+    }
+    100% { 
+        transform: translateY(0px) scale(1);
+    }
+}
+
 /* Floating Akasi Ball */
 .akasi-floating-ball {
     width: 120px;
@@ -102,12 +130,80 @@
     }
 }
 
+/* Slow-down versions of heartbeat animation */
+@keyframes heartbeatSlow {
+    0%, 100% { 
+        transform: scale(1);
+    }
+    50% { 
+        transform: scale(1.06);
+    }
+}
+
+@keyframes heartbeatVerySlow {
+    0%, 100% { 
+        transform: scale(1);
+    }
+    50% { 
+        transform: scale(1.03);
+    }
+}
+
+@keyframes heartbeatStopping {
+    0% { 
+        transform: scale(1.015);
+    }
+    100% { 
+        transform: scale(1);
+    }
+}
+
+/* ========================================
+   ANIMATION SLOWDOWN CONTROL CLASSES
+   ======================================== */
+
+/* Akasi Component Floating Animation Control */
+.akasi-component.slowing-down {
+    animation: floatUpDownSlow 6s ease-in-out infinite;
+}
+
+.akasi-component.very-slow {
+    animation: floatUpDownVerySlow 10s ease-in-out infinite;
+}
+
+.akasi-component.stopping {
+    animation: floatUpDownStopping 2s ease-out forwards;
+}
+
+.akasi-component.stopped {
+    animation: none;
+    transform: translateY(0px) scale(1);
+}
+
+/* Heart Icon Pulse Animation Control */
+.akasi-floating-ball .heart-icon.slowing-down {
+    animation: heartbeatSlow 3s ease-in-out infinite;
+}
+
+.akasi-floating-ball .heart-icon.very-slow {
+    animation: heartbeatVerySlow 5s ease-in-out infinite;
+}
+
+.akasi-floating-ball .heart-icon.stopping {
+    animation: heartbeatStopping 1.2s ease-out forwards;
+}
+
+.akasi-floating-ball .heart-icon.stopped {
+    animation: none;
+    transform: scale(1);
+}
+
 /* Akasi message bubble above the floating ball */
 .akasi-speech-bubble {
     position: absolute;
-    top: -120px; /* Increased from -80px to give more space */
+    bottom: 140px; /* Fixed distance from floating ball - expands upward */
     left: 50%; /* Center horizontally relative to the ball */
-    transform: translateX(-50%) translateY(10px);
+    transform: translateX(-50%) translateY(-10px);
     background: white;
     padding: 20px 24px; /* Increased padding for better readability */
     border-radius: 24px; /* More rounded corners for modern look */
@@ -115,6 +211,8 @@
     max-width: 600px; /* Increased from 400px to make it significantly wider */
     min-width: 380px; /* Increased minimum width for larger bubble */
     width: max-content; /* Allow natural width expansion */
+    max-height: calc(100vh - 300px); /* Prevent overflow, allow for header/footer space */
+    overflow-y: auto; /* Add scrolling for very long content */
     text-align: center;
     font-size: 15px; /* Slightly larger font */
     line-height: 1.6; /* Better line height for readability */
@@ -132,13 +230,13 @@
 .akasi-speech-bubble::after {
     content: '';
     position: absolute;
-    top: 100%;
+    bottom: -24px; /* Position tail below the bubble */
     left: 50%; /* Always center the tail horizontally */
     transform: translateX(-50%); /* Keep the transform to center the tail on its position */
     width: 0;
     height: 0;
     border: 12px solid transparent; /* Slightly larger tail */
-    border-top-color: white;
+    border-top-color: white; /* Point downward to the floating ball */
     filter: drop-shadow(0 3px 3px rgba(0, 0, 0, 0.1)); /* Shadow for the tail */
 }
 
@@ -524,7 +622,8 @@
         min-width: 280px; /* Added minimum width for mobile */
         font-size: 0.9rem;
         padding: 1rem 1.25rem;
-        transform: translateX(-50%) translateY(-15px); /* Adjusted spacing for mobile */
+        bottom: 120px; /* Adjusted for smaller mobile floating ball */
+        max-height: calc(100vh - 250px); /* More restrictive on mobile */
     }
     
     .akasi-speech-bubble::after {
