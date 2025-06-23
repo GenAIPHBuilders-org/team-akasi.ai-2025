@@ -53,7 +53,7 @@ The current implementation represents the **foundational architecture** of our m
 - [x] **Speech Bubble Chat Interface** - Refined onboarding experience with intuitive conversation flow  
 - [x] **Body Scanner Visualization** - Interactive SVG-based anatomy system with AI-controlled animations  
 
-### AI Agent System (Agent 1 - Health Information Orchestrator)
+### Agent 1 - Health Information Orchestrator
 - [x] **Empathetic Health Information Gathering** - Structured conversations designed to organize health management chaos  
 - [x] **Medical Image Analysis** - Image summarization for comprehensive health records  
 - [x] **Systematic Wellness Journal Population** - Targeted questioning to build complete health profiles  
@@ -85,7 +85,7 @@ The current implementation represents the **foundational architecture** of our m
 - [ ] **Proactive Health Features** - Automated reminders, health alerts, and preventive care suggestions
 
 
-### AI Agent Evaluation & Quality Assurance:
+## 🗺️ AI Agent Evaluation & Quality Assurance:
 Rigorous evaluation is critical for healthcare AI,  we're implementing comprehensive testing methodologies to ensure both Agent 1 and Agent 2 are reliable, measurable, and continuously improving rather than relying on unpredictable "AI magic." 
 
 Our evaluation implementation includes conversation quality metrics (information extraction accuracy, completion rates, and boundary compliance), user intent analysis to optimize conversation flows for common scenarios, performance benchmarking with structured testing and defined SLAs, and iterative optimization through data-driven improvements based on real user interaction patterns and feedback loops.
