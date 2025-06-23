@@ -30,7 +30,7 @@ This repository contains the work of Team Akasi.ai for the GenAI PHBuilders Hack
         <img src="https://myibryztojuymfqdybzy.supabase.co/storage/v1/object/public/akasi-images/images/prof-pic-emman.jpg" width="80" height="80" alt="Emman"/>
         <br>
         <b>Emman</b>
-        <p>Electronics Engineer with gut health issues<br>Built multiple AI solutions</p>
+        <p>Electronics Engineer with gut health issues<br>Currently works at their family business (Aesthetics and Wellness Industry) </p>
         <a href="https://www.linkedin.com/in/engrebi">
           <img src="https://img.shields.io/badge/LinkedIn-Connect-blue?style=flat-square&logo=linkedin" alt="LinkedIn"/>
         </a>
