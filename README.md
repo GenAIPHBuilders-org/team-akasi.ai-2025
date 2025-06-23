@@ -111,7 +111,7 @@ The current implementation represents the **foundational architecture** of our m
 
 
 ### Production Readiness & Compliance
-- [ ] **🏆 NPC Registration Preparation** - Compliance with Philippine data privacy regulations for healthcare applications  
+- [ ] **🏆 NPC Registration Preparation** - Compliance with Philippine data privacy regulations for healthcare applications. My teammate Jenrica has enterprise-level experience in this area, having led similar implementations at her previous company, MinebeaMitsumi, and in her current role.  
 - [ ] **🏆 One-Click Deployment** - Containerized deployment with comprehensive documentation for open source use.  
 
 ### Platform Expansion
@@ -121,7 +121,7 @@ The current implementation represents the **foundational architecture** of our m
 
 
 ## 🗺️ AI Agent Evaluation & Quality Assurance:
-Rigorous evaluation is critical for healthcare AI,  we're implementing comprehensive testing methodologies to ensure both Agent 1 and Agent 2 are reliable, measurable, and continuously improving rather than relying on unpredictable "AI magic." 
+Rigorous evaluation is critical for akasi.ai,  we're implementing comprehensive testing methodologies to ensure both Agent 1 and Agent 2 are reliable, measurable, and continuously improving rather than relying on unpredictable "AI magic." 
 
 Our evaluation implementation includes conversation quality metrics (information extraction accuracy, completion rates, and boundary compliance), user intent analysis to optimize conversation flows for common scenarios, performance benchmarking with structured testing and defined SLAs, and iterative optimization through data-driven improvements based on real user interaction patterns and feedback loops.
 
