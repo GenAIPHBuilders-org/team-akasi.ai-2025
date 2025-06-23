@@ -39,6 +39,42 @@ This repository contains the work of Team Akasi.ai for the GenAI PHBuilders Hack
   </table>
 </div>
 
+
+## 🛠️ Tech Stack & Architecture
+
+Akasi.ai leverages a modern tech stack to deliver an intelligent and responsive health management experience. Our architecture is designed around a multi-agent system to handle various aspects of health data processing and user interaction.
+
+![Akasi.ai Architecture](https://pcygqqevesxpeeyxxfjw.supabase.co/storage/v1/object/public/users/Medical%20Docs/user_1/akasi.ai%20Pitch%20Deck%20-%20Agentic%20AI%20Hackathon%202025%20(6).png)
+
+
+### Core Technologies
+
+**Platform Framework:** FastHTML - The entire platform is built using FastHTML, allowing for rapid development of dynamic web applications purely in Python.
+
+**AI Agent Framework:** LangGraph - We use LangGraph to build and orchestrate our multi-agent AI system, managing complex workflows for health information processing.
+- **Agent 1:** Responsible for empathetically gathering health information from the user.
+- **Agent 2:** Formats the gathered information into a structured and usable form for the Health Diary and platform display. (IN DEVELOPMENT PHASE)
+
+**Large Language Model (LLM):** Claude 3.5 Sonnet v2 via AWS Bedrock - Powers the intelligence of our AI agents, enabling natural language understanding and generation.
+
+### Frontend Styling
+- **Tailwind CSS** - A utility-first CSS framework for rapidly building custom user interfaces.
+- **DaisyUI** - A component library for Tailwind CSS to accelerate UI development.
+- **Standard JS and CSS** for additional interactivity and custom styling.
+
+### Backend (Database & Authentication)
+**Supabase** - Provides robust backend services including a PostgreSQL database, user authentication, and storage.
+
+### Simplified Architecture Overview
+
+Below is a simplified overview of our multi-agent architecture:
+
+```
+User Input → Agent 1 (Info Gathering with Tools like Medical Doc Summarizer) → LangGraph Workflows (UI Controller, LLM Journal Entry) → Agent 2 (Data Formatting & Health Diary Building with Supabase Tool) → Akasi.ai Dashboard
+```
+
+
+
 ## 🗺️ Development Roadmap
 
 ### Current State & Next Steps
@@ -92,39 +128,6 @@ Our evaluation implementation includes conversation quality metrics (information
 
 
 
-
-## 🛠️ Tech Stack & Architecture
-
-Akasi.ai leverages a modern tech stack to deliver an intelligent and responsive health management experience. Our architecture is designed around a multi-agent system to handle various aspects of health data processing and user interaction.
-
-![Akasi.ai Architecture](https://pcygqqevesxpeeyxxfjw.supabase.co/storage/v1/object/public/users/Medical%20Docs/user_1/akasi.ai%20Pitch%20Deck%20-%20Agentic%20AI%20Hackathon%202025%20(6).png)
-
-
-### Core Technologies
-
-**Platform Framework:** FastHTML - The entire platform is built using FastHTML, allowing for rapid development of dynamic web applications purely in Python.
-
-**AI Agent Framework:** LangGraph - We use LangGraph to build and orchestrate our multi-agent AI system, managing complex workflows for health information processing.
-- **Agent 1:** Responsible for empathetically gathering health information from the user.
-- **Agent 2:** Formats the gathered information into a structured and usable form for the Health Diary and platform display. (IN DEVELOPMENT PHASE)
-
-**Large Language Model (LLM):** Claude 3.5 Sonnet v2 via AWS Bedrock - Powers the intelligence of our AI agents, enabling natural language understanding and generation.
-
-### Frontend Styling
-- **Tailwind CSS** - A utility-first CSS framework for rapidly building custom user interfaces.
-- **DaisyUI** - A component library for Tailwind CSS to accelerate UI development.
-- **Standard JS and CSS** for additional interactivity and custom styling.
-
-### Backend (Database & Authentication)
-**Supabase** - Provides robust backend services including a PostgreSQL database, user authentication, and storage.
-
-### Simplified Architecture Overview
-
-Below is a simplified overview of our multi-agent architecture:
-
-```
-User Input → Agent 1 (Info Gathering with Tools like Medical Doc Summarizer) → LangGraph Workflows (UI Controller, LLM Journal Entry) → Agent 2 (Data Formatting & Health Diary Building with Supabase Tool) → Akasi.ai Dashboard
-```
 
 
 ---
