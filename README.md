@@ -152,6 +152,29 @@ AWS_SECRET_ACCESS_KEY=your-aws-secret-access-key
 
 Follow these steps to get Akasi.ai running on your local machine:
 
+### ⚠️ **Prerequisites: AWS Bedrock Setup Required**
+
+**Important:** Akasi.ai currently requires AWS Bedrock for AI functionality. We haven't yet enabled support for other LLM providers through OpenRouter, so AWS Bedrock is mandatory for the application to work.
+
+**Before proceeding with installation, you must:**
+
+1. **Create an AWS Account** (if you don't have one)
+2. **Enable AWS Bedrock Service** in your AWS account
+3. **Request Access to Anthropic Models** in AWS Bedrock:
+   - Claude 3.5 Sonnet v2 (primary model)
+   - Claude 3.7 Sonnet (for image analysis)
+   - Claude 4 variants (if available in your region)
+4. **Set up IAM Permissions** for Bedrock access
+5. **Generate AWS Access Keys** with appropriate Bedrock permissions
+
+**AWS Setup Steps:**
+- Navigate to AWS Bedrock console
+- Request model access for Anthropic Claude models
+- Create IAM user/role with `bedrock:InvokeModel` permissions
+- Generate access keys for your application
+
+Once AWS Bedrock is properly configured, add your AWS credentials to the environment variables as specified in the Environment Variables section.
+
 ### 1. Fork the Repository (Optional but Recommended for Contribution)
 If you plan to contribute or experiment, start by forking this repository to your own GitHub account.
 
