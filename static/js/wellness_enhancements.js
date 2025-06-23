@@ -375,7 +375,33 @@ function initializeChatMessageMonitoring() {
     const speechContent = document.getElementById('akasi-speech-content');
     if (speechContent) {
         const observer = new MutationObserver(() => {
-            const currentText = speechContent.textContent?.trim();
+            // Get text content excluding script elements
+            const textNodes = [];
+            const walker = document.createTreeWalker(
+                speechContent,
+                NodeFilter.SHOW_TEXT,
+                {
+                    acceptNode: function(node) {
+                        // Exclude text nodes that are inside script elements
+                        let parent = node.parentNode;
+                        while (parent && parent !== speechContent) {
+                            if (parent.tagName === 'SCRIPT') {
+                                return NodeFilter.FILTER_REJECT;
+                            }
+                            parent = parent.parentNode;
+                        }
+                        return NodeFilter.FILTER_ACCEPT;
+                    }
+                }
+            );
+            
+            let node;
+            while (node = walker.nextNode()) {
+                textNodes.push(node.textContent);
+            }
+            
+            const currentText = textNodes.join('').trim();
+            
             if (currentText && 
                 currentText.length > 10 && 
                 !currentText.includes('Akasi is typing') &&
