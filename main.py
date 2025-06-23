@@ -688,7 +688,7 @@ class WellnessJournalOperation(BaseModel):
     )
 
     wellness_journal_severity_value: Literal[1, 2, 3] = Field(
-        ...,
+        default=1,
         description=(
             "The severity of the reported symptom or condition, rated on a scale of 1 to 3. "
             "1: Low/Mild (minor discomfort, not significantly impacting daily activities). "
