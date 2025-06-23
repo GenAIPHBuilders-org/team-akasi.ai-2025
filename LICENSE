@@ -1,0 +1,55 @@
+MIT License
+
+Copyright (c) 2025 Team Akasi.ai - Jenrica Ann Decafe and Emmanuel Irog-irog
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+---
+
+## Additional Healthcare Notice
+
+This software is designed for health management and wellness tracking purposes. 
+While we strive for accuracy and reliability, this software:
+
+- Is not intended to replace professional medical advice, diagnosis, or treatment
+- Should not be used for emergency medical situations
+- Users should always consult with qualified healthcare professionals
+- Is provided for informational and educational purposes
+
+By using this software, you acknowledge that the authors and contributors are 
+not liable for any health-related decisions made based on the software's output.
+
+---
+
+## Open Source Commitment
+
+Akasi.ai is committed to democratizing healthcare technology. This project is 
+released under the MIT License to ensure:
+
+- Healthcare organizations can adopt and modify the software freely
+- Individuals can self-host for personal health management
+- Researchers and developers can build upon our work
+- Communities can deploy health management solutions without barriers
+
+We encourage contributions, feedback, and collaborative development to improve 
+healthcare accessibility for everyone, especially those managing chronic conditions.
+
+For questions about this license or collaboration opportunities, please contact:
+- Team Akasi.ai via GitHub Issues
+- Healthcare partnerships: emmanuel.irogirog@gmail.com or jenricaanndecafe@gmail.com
