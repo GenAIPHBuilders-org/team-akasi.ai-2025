@@ -111,7 +111,7 @@ The current implementation represents the **foundational architecture** of our m
 
 
 ### Production Readiness & Compliance
-- [ ] **🏆 NPC Registration Preparation** - Compliance with Philippine data privacy regulations for healthcare applications. My teammate Jenrica has enterprise-level experience in this area, having led similar implementations at her previous company, MinebeaMitsumi, and in her current role.  
+- [ ] **🏆 NPC Registration Preparation** - Compliance with Philippine data privacy regulations for healthcare applications. My teammate Jenrica has enterprise-level experience in this area. She previously led similar initiatives while working at MinebeaMitsumi and in her current company.
 - [ ] **🏆 One-Click Deployment** - Containerized deployment with comprehensive documentation for open source use.  
 
 ### Platform Expansion
