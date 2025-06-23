@@ -44,9 +44,6 @@ This repository contains the work of Team Akasi.ai for the GenAI PHBuilders Hack
 ### Current State & Next Steps
 The current implementation represents the **foundational architecture** of our multi-agent AI system. While the core features are currently bare bones, they effectively demonstrate the **power and potential of AI agents** in healthcare management. Our development trajectory focuses on evolving from this proof-of-concept into a production-ready, enterprise-grade health platform.
 
-**AI Agent Evaluation & Quality Assurance:**  
-Rigorous evaluation is critical for healthcare AI - we're implementing comprehensive testing methodologies to ensure both Agent 1 and Agent 2 are reliable, measurable, and continuously improving rather than relying on unpredictable "AI magic." Our evaluation implementation includes conversation quality metrics (information extraction accuracy, completion rates, and boundary compliance), user intent analysis to optimize conversation flows for common scenarios, performance benchmarking with structured testing and defined SLAs, and iterative optimization through data-driven improvements based on real user interaction patterns and feedback loops.
-
 ### Core Platform Features
 - [x] **Complete Authentication System** - Secure user registration, login, and session management powered by Supabase  
 - [x] **Intuitive User Interface** - Modern, responsive design using TailwindCSS and DaisyUI with exceptional user experience  
@@ -85,6 +82,15 @@ Rigorous evaluation is critical for healthcare AI - we're implementing comprehen
 - [ ] **Healthcare Provider Integration** - Professional tools and API ecosystem  
 - [ ] **Open Source Release** - Feature-complete platform with community contribution guidelines  
 - [ ] **Proactive Health Features** - Automated reminders, health alerts, and preventive care suggestions
+
+
+### AI Agent Evaluation & Quality Assurance (Ofcourse lets not forget about this): 
+Rigorous evaluation is critical for healthcare AI,  we're implementing comprehensive testing methodologies to ensure both Agent 1 and Agent 2 are reliable, measurable, and continuously improving rather than relying on unpredictable "AI magic." 
+
+Our evaluation implementation includes conversation quality metrics (information extraction accuracy, completion rates, and boundary compliance), user intent analysis to optimize conversation flows for common scenarios, performance benchmarking with structured testing and defined SLAs, and iterative optimization through data-driven improvements based on real user interaction patterns and feedback loops.
+
+
+
 
 ## 🛠️ Tech Stack & Architecture
 
