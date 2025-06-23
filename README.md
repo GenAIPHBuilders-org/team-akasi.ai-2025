@@ -68,6 +68,7 @@ The current implementation represents the **foundational architecture** of our m
 - [ ] **Agent 1 Optimizations** - Enhanced response accuracy and better context understanding  
 - [ ] **Health Data Export Tools** - Reporting and data portability features  
 - [ ] **Integration Layer** - Connecting traditional CRUD operations with Agent 2's intelligent processing  
+- [ ] **Core Evaluation Framework for our AI Agents** - Implementing comprehensive test criteria for multi-agent system evaluation from both functionality and security perspectives, including jailbreak resistance and privacy compliance testing   
 
 ### Critical Infrastructure & Security
 - [ ] **Healthcare-Grade Security** - Enhanced database security measures for healthcare data protection standards  
@@ -84,7 +85,7 @@ The current implementation represents the **foundational architecture** of our m
 - [ ] **Proactive Health Features** - Automated reminders, health alerts, and preventive care suggestions
 
 
-### AI Agent Evaluation & Quality Assurance (Ofcourse lets not forget about this): 
+### AI Agent Evaluation & Quality Assurance:
 Rigorous evaluation is critical for healthcare AI,  we're implementing comprehensive testing methodologies to ensure both Agent 1 and Agent 2 are reliable, measurable, and continuously improving rather than relying on unpredictable "AI magic." 
 
 Our evaluation implementation includes conversation quality metrics (information extraction accuracy, completion rates, and boundary compliance), user intent analysis to optimize conversation flows for common scenarios, performance benchmarking with structured testing and defined SLAs, and iterative optimization through data-driven improvements based on real user interaction patterns and feedback loops.
